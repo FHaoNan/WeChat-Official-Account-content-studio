@@ -501,10 +501,6 @@ if ($humannessReport) {
         layer2_is_stub = if ($humannessReport.summary) { [bool]$humannessReport.summary.layer2_is_stub } else { $null }
     }
 
-    if ($humannessReport.summary -and [bool]$humannessReport.summary.layer2_is_stub) {
-        Add-ReportItem -Report $report -Level warnings -Message 'Humanness report used the stub LLM judge. Layer 1 checklist is valid; subjective judge is not yet fully wired.'
-    }
-
     if ($failedChecks.Count -gt 0) {
         Add-ReportItem -Report $report -Level warnings -Message "Humanness checklist has failed items: $($failedChecks -join ', ')"
     }

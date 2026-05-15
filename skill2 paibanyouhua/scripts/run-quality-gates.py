@@ -193,8 +193,8 @@ def main() -> int:
 
         image_refs = re.findall(r"!\[[^\]]*\]\(([^)]+)\)", article_markdown)
         local_images = [normalize_image_src(item) for item in image_refs if not item.startswith(("http://", "https://"))]
-        image_count_status = "pass" if len(local_images) <= 10 else "fail"
-        add_check(checks, "image_count", image_count_status, f"正文图片数={len(local_images)} (need <=10)", data=local_images)
+        image_count_status = "pass" if 1 <= len(local_images) <= 10 else "fail"
+        add_check(checks, "image_count", image_count_status, f"正文图片数={len(local_images)} (need 1-10)", data=local_images)
 
         missing_images = []
         for ref in local_images:
