@@ -8,6 +8,16 @@
 
 ![GZH Content Studio workflow](assets/repo/hero.jpg)
 
+## v1.3.0 大更新
+
+这次更新把 WeWrite 从“能跑通的本地流程”升级成更完整的跨平台发布工作流。
+
+- **macOS / Windows 入口分离**：PowerShell wrapper 保留跨平台能力，但 Python、`.venv`、`site-packages` 和文件路径解析按平台分支处理，macOS 走 `.venv/bin/python`，Windows 走 `.venv\Scripts\python.exe`。
+- **草稿箱发布重构**：发布链路改为仓库内 Python 工具链直接调用微信 API，不再依赖 `.local\bin\md2wechat.exe`。
+- **发布前可干跑**：`-DryRun` 会验证配置、模板渲染、质量门禁和发布预检，但不上传素材、不创建或更新草稿。
+- **配置解析更清晰**：支持 `-Config` 和 `WEWRITE_PUBLISH_CONFIG`，并统一兼容仓库根目录、`skill2 paibanyouhua/.config/md2wechat/config.yaml` 与用户级配置。
+- **OpenClaw 分发同步**：`dist/openclaw/` 现在会带上必要的模板工作流源码，同时排除本地凭据、文章输出和缓存。
+
 ## 项目来源与致谢
 
 本仓库是我在尊重原始开源项目及其许可的前提下，结合自己在公众号内容生产、排版规范、视觉提示词、质量门禁和发布流程上的想法做的整合与修改版本。
@@ -358,6 +368,22 @@ python3 scripts/optimize_loop.py --topic "AI Agent" --iterations 10
 
 ## 默认模板工作流
 
+建议先用平台对应的虚拟环境初始化依赖。
+
+macOS / Linux：
+
+```bash
+python3 -m venv .venv
+./.venv/bin/python -m pip install -r requirements.txt
+```
+
+Windows PowerShell：
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
 ```bash
 # 新建文章目录
 powershell -ExecutionPolicy Bypass -File scripts/new_wechat_article.ps1 -Title "标题"
@@ -370,6 +396,9 @@ powershell -ExecutionPolicy Bypass -File scripts/check_wechat_article.ps1 -Artic
 
 # 直接推送公众号草稿箱
 powershell -ExecutionPolicy Bypass -File scripts/publish_wechat_article.ps1 -ArticleDir "文章目录名"
+
+# 指定发布配置并仅验证不触碰微信草稿
+powershell -ExecutionPolicy Bypass -File scripts/publish_wechat_article.ps1 -ArticleDir "文章目录名" -Config "skill2 paibanyouhua/.config/md2wechat/config.yaml" -DryRun
 ```
 
 新稿默认写在 `output/<文章标题>/article.md`。`article-body.template.html`、`preview.html`、`generated/output.html`、`generated/draft.json` 都由模板脚本自动生成；图片统一放在 `assets/`，横版封面固定为 `assets/cover-wide.jpg`，方形封面固定为 `assets/cover-square.jpg`，提示词统一放在 `generated/image-prompts.md`。从现在开始，`render` 和 `publish` 都会自动生成 `generated/humanness-report.json`、`generated/diagnose-report.json`、`generated/article-doctor-report.json`、`generated/seo-report.json`、`generated/quality-gates.json`，不再靠人工记得补跑。

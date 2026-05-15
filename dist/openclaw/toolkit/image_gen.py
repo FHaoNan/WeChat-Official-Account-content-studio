@@ -21,6 +21,7 @@ import abc
 import argparse
 import base64
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -30,6 +31,7 @@ import yaml
 # --- Config ---
 
 CONFIG_PATHS = [
+    Path(__file__).resolve().parent.parent / "skill2 paibanyouhua" / ".config" / "md2wechat" / "config.yaml",
     Path.cwd() / "config.yaml",
     Path(__file__).parent.parent / "config.yaml",  # skill root
     Path(__file__).parent / "config.yaml",          # toolkit dir
@@ -38,7 +40,14 @@ CONFIG_PATHS = [
 
 
 def _load_config() -> dict:
-    for p in CONFIG_PATHS:
+    paths: list[Path] = []
+    env_path = os.environ.get("WEWRITE_PUBLISH_CONFIG", "")
+    if env_path:
+        raw = Path(env_path).expanduser()
+        paths.append(raw if raw.is_absolute() else Path.cwd() / raw)
+    paths.extend(CONFIG_PATHS)
+
+    for p in paths:
         if p.exists():
             with open(p, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}

@@ -16,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 
 # Directories to copy alongside SKILL.md
 COPY_DIRS = ["references", "scripts", "toolkit", "personas"]
+WORKFLOW_DIR = "skill2 paibanyouhua"
 
 # Files to copy alongside SKILL.md
 COPY_FILES = [
@@ -28,6 +29,23 @@ COPY_FILES = [
 
 # Frontmatter keys to strip (OpenClaw ignores allowed-tools)
 STRIP_FRONTMATTER_KEYS = {"allowed-tools"}
+
+
+def ignore_workflow_runtime(dir_path: str, names: list[str]) -> set[str]:
+    """Keep the compatibility workflow, but drop local credentials and runtime output."""
+    source_root = REPO_ROOT / WORKFLOW_DIR
+    rel = Path(dir_path).resolve().relative_to(source_root)
+    ignored = {"__pycache__"}
+    ignored.update(name for name in names if name.endswith((".pyc", ".pyo")))
+
+    if rel == Path("."):
+        allowed = {"README.md", ".agents", ".config", "scripts", "templates"}
+        ignored.update(name for name in names if name not in allowed)
+
+    if ".config" in rel.parts:
+        ignored.update(name for name in names if name == "config.yaml")
+
+    return ignored
 
 
 def transform_frontmatter(frontmatter: str) -> str:
@@ -109,6 +127,17 @@ def build(output_dir: Path):
                 "__pycache__", "*.pyc", "*.pyo",
             ))
             print(f"  {d}/ → {dst}")
+
+    # Copy the template workflow used by the public wrappers. Keep only source
+    # files and examples; never copy local article folders, credentials, caches,
+    # or bundled binary/runtime state.
+    workflow_src = REPO_ROOT / WORKFLOW_DIR
+    workflow_dst = output_dir / WORKFLOW_DIR
+    if workflow_src.is_dir():
+        if workflow_dst.exists():
+            shutil.rmtree(workflow_dst)
+        shutil.copytree(workflow_src, workflow_dst, ignore=ignore_workflow_runtime)
+        print(f"  {WORKFLOW_DIR}/ → {workflow_dst}")
 
     # Copy supporting files
     for f in COPY_FILES:

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -16,13 +17,31 @@ from bs4.element import NavigableString, Tag
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-def load_config() -> dict[str, Any]:
-    config_path = REPO_ROOT / "config.yaml"
-    if not config_path.exists():
-        raise FileNotFoundError(f"config.yaml not found: {config_path}")
+def config_paths(explicit_config: str = "") -> list[Path]:
+    paths: list[Path] = []
+    for raw in (explicit_config, os.environ.get("WEWRITE_PUBLISH_CONFIG", "")):
+        if raw:
+            path = Path(raw).expanduser()
+            paths.append(path if path.is_absolute() else Path.cwd() / path)
+    paths.extend(
+        [
+            REPO_ROOT / "skill2 paibanyouhua" / ".config" / "md2wechat" / "config.yaml",
+            REPO_ROOT / "config.yaml",
+            REPO_ROOT / "toolkit" / "config.yaml",
+            Path.home() / ".config" / "wewrite" / "config.yaml",
+            Path.cwd() / "config.yaml",
+        ]
+    )
+    return paths
+
+
+def load_config(explicit_config: str = "") -> dict[str, Any]:
+    config_path = next((path for path in config_paths(explicit_config) if path.exists()), None)
+    if config_path is None:
+        raise FileNotFoundError("No config.yaml found")
     data = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
     if not isinstance(data, dict):
-        raise ValueError("config.yaml is not a mapping")
+        raise ValueError(f"config.yaml is not a mapping: {config_path}")
     return data
 
 
@@ -140,9 +159,10 @@ def main() -> int:
     parser.add_argument("--media-id", required=True)
     parser.add_argument("--output-json", required=True)
     parser.add_argument("--output-md", required=True)
+    parser.add_argument("--config", default="", help="Optional config.yaml path")
     args = parser.parse_args()
 
-    config = load_config()
+    config = load_config(args.config)
     wechat_cfg = config.get("wechat") or {}
     appid = str(wechat_cfg.get("appid") or "").strip()
     secret = str(wechat_cfg.get("secret") or "").strip()

@@ -20,6 +20,9 @@
 
 - 本地渲染 / 预览统一使用 `powershell -ExecutionPolicy Bypass -File {skill_dir}/scripts/render_wechat_article.ps1 -ArticleDir "<文章目录>"`。
 - 推草稿统一使用 `powershell -ExecutionPolicy Bypass -File {skill_dir}/scripts/publish_wechat_article.ps1 -ArticleDir "<文章目录>"`。
+- 需要指定发布配置时，使用 `-Config "<config.yaml 路径>"`；发布器会直接走 Python 微信 API，不依赖 `md2wechat.exe`。
+- 验证入口、配置和质量门禁但不触碰微信草稿时，使用 `-DryRun`。
+- 跨平台脚本必须使用分段 `Join-Path` 和平台专属 `.venv` 路径：macOS/Linux 使用 `.venv/bin/python`，Windows 使用 `.venv\Scripts\python.exe`。
 - `toolkit/cli.py publish` 不再作为默认草稿入口，只保留给旧流程或主题画廊辅助命令。
 - 质量门禁是零容忍模式：`generated/quality-gates.json` 里 `summary.fail`、`summary.warn`、`summary.skip` 必须全部为 0 才能继续。
 - 发布预检同样不允许 warning；任何 warning 都要先修复成 pass，不能靠“只是警告”继续推草稿。
@@ -35,4 +38,3 @@
 - mojibake 字节汤（如 `åäç` 这类断裂高位字节）
 
 只要命中任意一项，就直接拒绝发稿，而不是“带病发布”。本链路的通过标准是 `fail=0 / warn=0 / skip=0`。
-

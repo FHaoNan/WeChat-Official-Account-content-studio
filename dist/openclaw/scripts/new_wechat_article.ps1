@@ -7,7 +7,8 @@ param(
 )
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
-$scriptPath = Join-Path $repoRoot 'skill2 paibanyouhua\scripts\new-article.ps1'
+$workflowRoot = Join-Path $repoRoot 'skill2 paibanyouhua'
+$scriptPath = Join-Path (Join-Path $workflowRoot 'scripts') 'new-article.ps1'
 if (-not (Test-Path -LiteralPath $scriptPath)) {
     throw "Template article script not found: $scriptPath"
 }

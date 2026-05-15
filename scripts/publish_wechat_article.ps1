@@ -1,7 +1,9 @@
 param(
     [Parameter(Mandatory = $true)]
     [string]$ArticleDir,
-    [switch]$AllowNativeLists
+    [switch]$AllowNativeLists,
+    [string]$Config = '',
+    [switch]$DryRun
 )
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -40,9 +42,29 @@ if (-not (Test-Path -LiteralPath $resolvedArticleDir)) {
     throw "Article folder not found: $resolvedArticleDir"
 }
 
-$scriptPath = Join-Path $workflowRoot 'scripts\publish-article.ps1'
+$scriptPath = Join-Path (Join-Path $workflowRoot 'scripts') 'publish-article.ps1'
 if (-not (Test-Path -LiteralPath $scriptPath)) {
     throw "Template publish script not found: $scriptPath"
 }
 
-& $scriptPath -ArticleDir $resolvedArticleDir -AllowNativeLists:$AllowNativeLists
+$publishParams = @{
+    ArticleDir = $resolvedArticleDir
+}
+if ($AllowNativeLists) {
+    $publishParams.AllowNativeLists = $true
+}
+if (-not [string]::IsNullOrWhiteSpace($Config)) {
+    $publishParams.Config = $Config
+}
+if ($DryRun) {
+    $publishParams.DryRun = $true
+}
+
+& $scriptPath @publishParams
+$publishSucceeded = $?
+if ($LASTEXITCODE -ne 0) {
+    exit $LASTEXITCODE
+}
+if (-not $publishSucceeded) {
+    exit 1
+}

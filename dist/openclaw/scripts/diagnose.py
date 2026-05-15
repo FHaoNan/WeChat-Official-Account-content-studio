@@ -13,6 +13,7 @@ Usage:
 import argparse
 import importlib
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -77,12 +78,27 @@ def check_dependencies():
     )]
 
 
+def resolve_config_path():
+    env_config = os.environ.get("WEWRITE_PUBLISH_CONFIG", "").strip()
+    config_candidates = []
+    if env_config:
+        env_path = Path(env_config).expanduser()
+        if not env_path.is_absolute():
+            env_path = Path.cwd() / env_path
+        config_candidates.append(env_path)
+    config_candidates.extend([
+        SKILL_ROOT / "config.yaml",
+        SKILL_ROOT / "skill2 paibanyouhua" / ".config" / "md2wechat" / "config.yaml",
+    ])
+    return next((path.resolve() for path in config_candidates if path.exists()), None)
+
+
 def check_config():
     """Group 2: Check config.yaml and its fields."""
     checks = []
-    config_path = SKILL_ROOT / "config.yaml"
+    config_path = resolve_config_path()
 
-    if not config_path.exists():
+    if config_path is None:
         checks.append(make_check(
             "config", "config_file", "warn",
             "not found → publish and image generation disabled",
@@ -93,7 +109,7 @@ def check_config():
         checks.append(make_check("config", "image_api_key", "warn", "no config.yaml", impact="skip_image_gen"))
         return checks
 
-    checks.append(make_check("config", "config_file", "pass", "found"))
+    checks.append(make_check("config", "config_file", "pass", f"found: {config_path}"))
 
     with open(config_path, "r", encoding="utf-8") as f:
         cfg = yaml.safe_load(f) or {}
@@ -107,8 +123,11 @@ def check_config():
 
     # Image API key
     image = cfg.get("image", {})
+    require_image_config = os.environ.get("WEWRITE_REQUIRE_IMAGE_CONFIG", "1").lower() not in {"0", "false", "no"}
     if image.get("api_key"):
         checks.append(make_check("config", "image_api_key", "pass", "configured"))
+    elif not require_image_config:
+        checks.append(make_check("config", "image_api_key", "pass", "not required for this publish run"))
     else:
         checks.append(make_check("config", "image_api_key", "warn", "missing → image generation will be skipped", impact="skip_image_gen"))
 
@@ -267,7 +286,8 @@ def file_status_map(checks):
             break
 
     return {
-        "config_yaml": (SKILL_ROOT / "config.yaml").exists(),
+        "config_yaml": bool(resolve_config_path()),
+        "config_yaml_path": str(resolve_config_path() or ""),
         "style_yaml": (SKILL_ROOT / "style.yaml").exists(),
         "writing_config_yaml": (SKILL_ROOT / "writing-config.yaml").exists(),
         "playbook_md": (SKILL_ROOT / "playbook.md").exists(),

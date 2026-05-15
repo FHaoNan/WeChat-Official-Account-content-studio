@@ -9,6 +9,7 @@ Usage:
 """
 
 import argparse
+import os
 import sys
 import webbrowser
 from pathlib import Path
@@ -21,9 +22,11 @@ from wechat_api import get_access_token, upload_image, upload_thumb
 from publisher import create_draft, create_image_post
 
 # Config file search order
+SKILL_ROOT = Path(__file__).resolve().parent.parent
 CONFIG_PATHS = [
+    SKILL_ROOT / "skill2 paibanyouhua" / ".config" / "md2wechat" / "config.yaml",
     Path.cwd() / "config.yaml",
-    Path(__file__).parent.parent / "config.yaml",  # skill root
+    SKILL_ROOT / "config.yaml",  # skill root
     Path(__file__).parent / "config.yaml",          # toolkit dir
     Path.home() / ".config" / "wewrite" / "config.yaml",
 ]
@@ -31,7 +34,14 @@ CONFIG_PATHS = [
 
 def load_config() -> dict:
     """Load config from first found config.yaml."""
-    for p in CONFIG_PATHS:
+    paths: list[Path] = []
+    env_path = os.environ.get("WEWRITE_PUBLISH_CONFIG", "")
+    if env_path:
+        raw = Path(env_path).expanduser()
+        paths.append(raw if raw.is_absolute() else Path.cwd() / raw)
+    paths.extend(CONFIG_PATHS)
+
+    for p in paths:
         if p.exists():
             with open(p, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
