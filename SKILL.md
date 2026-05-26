@@ -155,6 +155,8 @@ python3 {skill_dir}/scripts/seo_keywords.py --json {关键词}
 
 优先运行：`python3 {skill_dir}/scripts/select_ai_topics.py --hotspots {hotspots_json} --style {skill_dir}/style.yaml --limit 10`。需要 AI 主编复评时显式加 `--llm-rerank --config {skill_dir}/config.yaml --prefilter-limit 20`；LLM rerank 默认关闭，配置缺失或调用失败时必须 fallback 到启发式排序。每个选题含标题、国内热点来源、AI 工程师问题、评分、点击率潜力、SEO 友好度、推荐框架、海外补证方向和风险提醒；启用 LLM 后额外输出 `llm_review`、`final_score`，并在 `llm_review` 内给出 `token_burner_angle`、`overseas_evidence_plan`。近 7 天已写的关键词降分。
 
+选题已经补齐三类 URL 来源后，可一键串联生成草稿和报告：`python3 {skill_dir}/toolkit/cli.py draft-from-topic --topic-file {topic_json} --author "烧 Token 的人"`。该命令会创建标准文章目录，写入 `article.md`、`generated/sources.json`、`generated/topic.json`，并自动执行 render 与 quality gates（含 source gate）。如果希望质量门禁非 pass 时直接返回非 0，加 `--strict-check`。注意：该命令不会编造 URL；没有可验证 URL 时会生成草稿，但 `source_credibility` 会 fail，必须先补证。
+
 选题必须遵循 `references/topic-selection.md` 的原则：**国内热点发现，海外信息补证**。国内热搜只解决选题入口，后续事实素材、技术判断、模型能力、产品细节和产业链证据仍必须回到 Step 3b 的 `source_policy` 检索与交叉验证。
 
 - 自动模式 → 选最高分

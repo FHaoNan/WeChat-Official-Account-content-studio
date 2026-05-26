@@ -14,6 +14,7 @@ import os
 import re
 import subprocess
 import sys
+import textwrap
 import webbrowser
 from pathlib import Path
 
@@ -121,19 +122,13 @@ def run_python_script_capture(script: Path, args: list[str]) -> tuple[int, str, 
     return int(completed.returncode), completed.stdout, completed.stderr
 
 
-def cmd_new(args) -> None:
-    """Create a standard managed article directory without PowerShell."""
-    title = args.title.strip()
-    if not title:
-        raise ValueError("--title is required")
-    author = args.author or ""
-    source_url = args.source_url or ""
+def create_article_directory(title: str, author: str = "", source_url: str = "", *, force: bool = False) -> dict[str, str]:
     folder_name = safe_folder_name(title)
     output_root = Path(os.environ.get("WEWRITE_OUTPUT_ROOT", str(SKILL_ROOT / "output"))).expanduser()
     if not output_root.is_absolute():
         output_root = (SKILL_ROOT / output_root).resolve()
     article_dir = output_root / folder_name
-    if article_dir.exists() and not args.force:
+    if article_dir.exists() and not force:
         raise FileExistsError(f"Article folder already exists: {article_dir}")
 
     assets_dir = article_dir / "assets"
@@ -154,14 +149,23 @@ def cmd_new(args) -> None:
             raise FileNotFoundError(f"Template not found: {template}")
         write_utf8(output, render_template(template, tokens))
 
-    print(json.dumps({
+    return {
         "article_dir": str(article_dir.resolve()),
         "folder_name": folder_name,
         "article_file": str((article_dir / "article.md").resolve()),
         "html_template": str((article_dir / "article-body.template.html").resolve()),
         "metadata_file": str((article_dir / "draft-metadata.json").resolve()),
         "image_prompt_file": str((generated_dir / "image-prompts.md").resolve()),
-    }, ensure_ascii=False, indent=2))
+    }
+
+
+def cmd_new(args) -> None:
+    """Create a standard managed article directory without PowerShell."""
+    title = args.title.strip()
+    if not title:
+        raise ValueError("--title is required")
+    payload = create_article_directory(title, args.author or "", args.source_url or "", force=args.force)
+    print(json.dumps(payload, ensure_ascii=False, indent=2))
 
 
 def cmd_render(args) -> int:
@@ -211,6 +215,192 @@ def cmd_publish_draft(args) -> int:
     if args.dry_run:
         script_args.append("--dry-run")
     return run_python_script(script, script_args)
+
+
+def _load_topic_payload(topic_file: Path) -> dict:
+    data = json.loads(topic_file.read_text(encoding="utf-8"))
+    if isinstance(data, dict):
+        return data
+    raise ValueError("topic file must contain a JSON object")
+
+
+def _select_topic(payload: dict, index: int | None = None) -> dict:
+    topics = payload.get("topics")
+    if isinstance(topics, list) and topics:
+        if index is not None:
+            if index < 0 or index >= len(topics):
+                raise IndexError(f"--topic-index out of range: {index}")
+            topic = topics[index]
+        else:
+            topic = next((item for item in topics if item.get("auto_write_allowed", True)), topics[0])
+    else:
+        topic = payload.get("topic", payload)
+    if not isinstance(topic, dict):
+        raise ValueError("selected topic must be a JSON object")
+    return topic
+
+
+def _topic_title(topic: dict) -> str:
+    raw_hotspot = topic.get("hotspot")
+    hotspot: dict = raw_hotspot if isinstance(raw_hotspot, dict) else {}
+    return str(topic.get("recommended_title") or topic.get("title") or hotspot.get("title") or "未命名选题").strip()
+
+
+def _topic_sources(topic: dict, payload: dict) -> list[dict]:
+    raw_sources = topic.get("sources") or topic.get("evidence_sources") or topic.get("verified_sources") or payload.get("sources") or []
+    sources: list[dict] = []
+    for item in raw_sources:
+        if isinstance(item, str):
+            sources.append({"url": item})
+        elif isinstance(item, dict):
+            copied = dict(item)
+            if copied.get("query") and not copied.get("url"):
+                copied.setdefault("title", copied.get("query"))
+            sources.append(copied)
+    return sources
+
+
+def _source_lines(sources: list[dict]) -> str:
+    if not sources:
+        return "- 暂无已验证来源；需要先补齐 official/GitHub/论文/财报、社区讨论、英文媒体三类证据。"
+    lines = []
+    for idx, source in enumerate(sources, 1):
+        title = str(source.get("title") or source.get("name") or source.get("source_type") or f"来源 {idx}").strip()
+        url = str(source.get("url") or source.get("link") or "").strip()
+        source_type = str(source.get("source_type") or source.get("category") or "unclassified").strip()
+        if url:
+            lines.append(f"- [{title}]({url})（{source_type}）")
+        else:
+            query = str(source.get("query") or "").strip()
+            lines.append(f"- {title}（{source_type}）：{query or '待补 URL'}")
+    return "\n".join(lines)
+
+
+def _write_placeholder_assets(article_dir: Path) -> None:
+    assets = article_dir / "assets"
+    assets.mkdir(parents=True, exist_ok=True)
+    for name in ["img-01.jpg", "cover-wide.jpg", "cover-square.jpg"]:
+        path = assets / name
+        if not path.exists():
+            path.write_bytes(b"placeholder")
+
+
+def _build_topic_article(topic: dict, sources: list[dict]) -> str:
+    title = _topic_title(topic)
+    hotspot = topic.get("hotspot") if isinstance(topic.get("hotspot"), dict) else {}
+    hotspot_title = str(hotspot.get("title") or topic.get("hotspot_title") or title)
+    hotspot_source = str(hotspot.get("source") or topic.get("source") or "国内热点")
+    engineering_question = str(topic.get("engineering_question") or topic.get("ai_engineering_question") or "这个现象背后的工程问题是什么？")
+    angle = str(topic.get("token_burner_angle") or topic.get("angle") or topic.get("editorial_reason") or "从模型调用、上下文、工具链和成本结构拆开看。")
+    reader_question = str(topic.get("reader_question") or "如果你正在用 AI 工具，这会影响你每天的使用成本和判断方式。")
+    source_section = _source_lines(sources)
+    return textwrap.dedent(f"""\
+    # {title}
+
+    先说结论：这不是一条单纯的 AI 热点，而是一个值得从模型工程、产品机制和 token 成本一起拆开的信号。
+
+    :::callout info
+    国内热点入口：{hotspot_source} / {hotspot_title}
+    :::
+
+    ## 这件事真正值得看的地方
+
+    {reader_question}
+
+    对「烧 Token 的人」来说，关键不是复述热搜，而是追问：一次看似简单的 AI 产品变化，背后到底多烧了哪些 token、哪些调用、哪些上下文窗口，以及哪些工程取舍。
+
+    ## 工程问题
+
+    {engineering_question}
+
+    {angle}
+
+    这里至少有三层需要拆开：第一层是用户看到的产品变化，第二层是模型和工具调用链路，第三层是成本、延迟、可靠性之间的权衡。很多争议表面上是体验问题，底层其实是 token 预算和系统设计问题。
+
+    ## 事实链路怎么补
+
+    这篇草稿已经先把可验证来源放进 sources.json，并在质量门禁里强制检查三类来源是否齐全：一手来源、社区讨论、英文媒体或强二手验证。
+
+    {source_section}
+
+    ![图 1：从热点到事实链路的检查路径](img-01.jpg)
+    *图 1：从国内热点发现问题，再用海外一手和强二手来源补证。*
+
+    ## 暂定写作结构
+
+    :::timeline
+    **第一步** 用国内热点说明读者为什么关心
+    **第二步** 用官方 / GitHub / 论文 / 财报确认事实边界
+    **第三步** 用社区讨论观察真实使用摩擦
+    **第四步** 用英文媒体或强二手资料交叉验证产业判断
+    :::
+
+    ## 下一步需要人工或 agent 深挖
+
+    - 把每个来源里的关键事实摘出来，标注哪些是事实，哪些是推断。
+    - 把「烧 token」的位置具体化：上下文、工具调用、重试、缓存、推理时间或部署成本。
+    - 删除没有证据支撑的判断，只保留能被来源链路支撑的段落。
+
+    :::quote
+    自动草稿的目标不是直接发布，而是把选题、补证、草稿和门禁串成一条可检查的生产线。
+    :::
+    """)
+
+
+def cmd_draft_from_topic(args) -> int:
+    payload = _load_topic_payload(Path(args.topic_file))
+    topic = _select_topic(payload, args.topic_index)
+    title = args.title or _topic_title(topic)
+    sources = _topic_sources(topic, payload)
+    primary_source_url = next((str(item.get("url") or item.get("link") or "") for item in sources if item.get("url") or item.get("link")), "")
+
+    created = create_article_directory(title, args.author or "烧 Token 的人", primary_source_url, force=args.force)
+    article_dir = Path(created["article_dir"])
+    generated_dir = article_dir / "generated"
+    write_utf8(article_dir / "article.md", _build_topic_article(topic, sources))
+    write_utf8(generated_dir / "sources.json", json.dumps({"sources": sources}, ensure_ascii=False, indent=2) + "\n")
+    write_utf8(generated_dir / "topic.json", json.dumps(topic, ensure_ascii=False, indent=2) + "\n")
+    _write_placeholder_assets(article_dir)
+
+    render_script = SKILL_ROOT / "skill2 paibanyouhua" / "scripts" / "render-article.py"
+    render_args = ["--article-dir", str(article_dir)]
+    if args.theme:
+        render_args.extend(["--theme", args.theme])
+    render_code, render_stdout, render_stderr = run_python_script_capture(render_script, render_args)
+    if render_code != 0:
+        if render_stdout:
+            print(render_stdout, file=sys.stderr, end="")
+        if render_stderr:
+            print(render_stderr, file=sys.stderr, end="")
+        return render_code
+
+    gate_script = SKILL_ROOT / "skill2 paibanyouhua" / "scripts" / "run-quality-gates.py"
+    gate_code, gate_stdout, gate_stderr = run_python_script_capture(gate_script, ["--article-dir", str(article_dir)] + (["--strict"] if args.strict_check else []))
+    if gate_stderr:
+        print(gate_stderr, file=sys.stderr, end="")
+    if gate_code != 0 and args.strict_check:
+        if gate_stdout:
+            print(gate_stdout, file=sys.stderr, end="")
+        return gate_code
+
+    artifacts = {
+        "article_md": str(article_dir / "article.md"),
+        "preview_html": str(article_dir / "preview.html"),
+        "sources_json": str(generated_dir / "sources.json"),
+        "source_report": str(generated_dir / "source-report.json"),
+        "quality_gates": str(generated_dir / "quality-gates.json"),
+    }
+    result = {
+        "success": True,
+        "article_dir": str(article_dir),
+        "title": title,
+        "render": json.loads(render_stdout) if render_stdout.strip().startswith("{") else {"stdout": render_stdout.strip()},
+        "quality_gates_exit_code": gate_code,
+        "artifacts": artifacts,
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
 
 def cmd_preview(args):
     """Generate HTML preview and open in browser."""
@@ -578,6 +768,15 @@ def main():
     p_publish_draft.add_argument("--dry-run", action="store_true", help="Validate only; do not upload or create draft")
     p_publish_draft.add_argument("--allow-native-lists", action="store_true", help="Allow native ul/ol/li in final HTML")
 
+    p_draft_topic = sub.add_parser("draft-from-topic", help="Create article draft from selected topic JSON and run render/source gates")
+    p_draft_topic.add_argument("--topic-file", required=True, help="Topic JSON from select_ai_topics.py or curated research payload")
+    p_draft_topic.add_argument("--topic-index", type=int, default=None, help="Index inside topics[]; default picks first auto-writeable topic")
+    p_draft_topic.add_argument("--title", default="", help="Override article title")
+    p_draft_topic.add_argument("--author", default="烧 Token 的人", help="Article author")
+    p_draft_topic.add_argument("--theme", default="", help="Override render theme")
+    p_draft_topic.add_argument("--force", action="store_true", help="Overwrite existing article folder files")
+    p_draft_topic.add_argument("--strict-check", action="store_true", help="Return non-zero if quality gates have non-pass items")
+
     # preview
     p_preview = sub.add_parser("preview", help="Generate HTML and open in browser")
     p_preview.add_argument("input", help="Markdown file path")
@@ -623,6 +822,8 @@ def main():
             sys.exit(cmd_check(args))
         elif args.command == "publish-draft":
             sys.exit(cmd_publish_draft(args))
+        elif args.command == "draft-from-topic":
+            sys.exit(cmd_draft_from_topic(args))
         elif args.command == "preview":
             cmd_preview(args)
         elif args.command == "publish":

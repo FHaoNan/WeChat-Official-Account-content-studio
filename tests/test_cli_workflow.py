@@ -156,6 +156,40 @@ class CliWorkflowTests(unittest.TestCase):
         self.assertIn("No publish config.yaml found", payload["error"])
         self.assertFalse((article_dir / "generated" / "draft.json").exists())
 
+    def test_draft_from_topic_creates_article_sources_and_reports(self):
+        topic_file = self.tmp / "topic.json"
+        topic_file.write_text(json.dumps({
+            "topics": [
+                {
+                    "recommended_title": "GPT-5 Agent 成本为什么降不下来",
+                    "engineering_question": "为什么多步 Agent 比普通问答更烧 token？",
+                    "hotspot": {"title": "Agent 应用成本讨论升温", "source": "微博", "url": "https://example.com/hot"},
+                    "token_burner_angle": "从上下文膨胀、工具调用和重试链路拆解 Agent 成本。",
+                    "sources": [
+                        {"title": "OpenAI docs", "url": "https://platform.openai.com/docs/guides/tools", "source_type": "official_docs"},
+                        {"title": "HN discussion", "url": "https://news.ycombinator.com/item?id=123", "source_type": "community"},
+                        {"title": "Reuters report", "url": "https://www.reuters.com/technology/artificial-intelligence/example", "source_type": "mainstream_media"},
+                    ],
+                }
+            ]
+        }, ensure_ascii=False), encoding="utf-8")
+
+        proc = self.run_cli("draft-from-topic", "--topic-file", str(topic_file), "--author", "烧 Token 的人")
+        payload = json.loads(proc.stdout)
+        article_dir = Path(payload["article_dir"])
+        self.assertTrue((article_dir / "article.md").exists())
+        self.assertTrue((article_dir / "preview.html").exists())
+        self.assertTrue((article_dir / "generated" / "sources.json").exists())
+        self.assertTrue((article_dir / "generated" / "source-report.json").exists())
+        self.assertTrue((article_dir / "generated" / "quality-gates.json").exists())
+        source_report = json.loads((article_dir / "generated" / "source-report.json").read_text(encoding="utf-8"))
+        self.assertTrue(source_report["summary"]["passed"])
+        quality = json.loads((article_dir / "generated" / "quality-gates.json").read_text(encoding="utf-8"))
+        checks = {item["name"]: item for item in quality["checks"]}
+        self.assertEqual(checks["source_credibility"]["status"], "pass")
+        self.assertIn("sources_json", payload["artifacts"])
+        self.assertIn("quality_gates", payload["artifacts"])
+
 
 if __name__ == "__main__":
     unittest.main()
