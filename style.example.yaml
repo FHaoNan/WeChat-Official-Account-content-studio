@@ -38,6 +38,30 @@ reference_accounts:
   - "虎嗅"
   - "少数派"
 
+# 选题策略
+topic_policy:
+  hotspot_principle: "国内热点发现，可信信息补证；不追纯热搜，要把热点翻译成账号能讲清楚的问题"
+  hotspot_sources:
+    - "微博热搜"
+    - "百度热搜"
+    - "今日头条热榜"
+    - "微信指数/搜一搜趋势"
+    - "知乎热榜"
+  scoring_bias:
+    - "优先选择和账号定位强相关、能解释机制或方法的热点"
+    - "热度高但没有解释价值的热点降权"
+
+# 信息源偏好
+source_policy:
+  principle: "优先使用一手来源和可信媒体；参考账号只做风格参考，不作为默认事实来源"
+  preferred_platforms: ["x.com", "reddit.com", "github.com", "youtube.com"]
+  preferred_media: ["reuters.com", "bloomberg.com", "ft.com"]
+  avoid_as_primary_sources: ["mp.weixin.qq.com", "zhihu.com"]
+  source_rules:
+    - "社交平台可作为线索，重大事实必须交叉验证"
+  search_queries:
+    - "{选题关键词英文} site:x.com OR site:reddit.com OR site:github.com"
+
 # 排版
 # auto = 根据文章内容和最近历史自动轮换；fixed = 固定使用 theme
 theme_mode: "auto"

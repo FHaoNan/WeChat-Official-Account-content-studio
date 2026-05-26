@@ -1,0 +1,197 @@
+name: "token-data"
+description: "烧 Token 的人数据新闻主题：白底黑字、琥珀强调，适合 AI 产业链和商业分析"
+colors:
+  primary: "#d97706"
+  secondary: "#111827"
+  text: "#111827"
+  text_light: "#4b5563"
+  background: "#ffffff"
+  code_bg: "#f8fafc"
+  code_color: "#b45309"
+  quote_border: "#d97706"
+  quote_bg: "#fff7ed"
+  border_radius: "4px"
+  darkmode:
+    background: "#111827"
+    text: "#f3f4f6"
+    text_light: "#9ca3af"
+    primary: "#fbbf24"
+    code_bg: "#1f2937"
+    code_color: "#fbbf24"
+    quote_bg: "#2a2113"
+    quote_border: "#fbbf24"
+base_css: |
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    font-size: 16px;
+    line-height: 1.84;
+    color: #111827;
+    background: #ffffff;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 22px;
+    word-wrap: break-word;
+  }
+
+  h1 {
+    font-size: 28px;
+    font-weight: 900;
+    color: #111827;
+    margin: 36px 0 18px 0;
+    padding-bottom: 14px;
+    border-bottom: 4px solid #d97706;
+    line-height: 1.32;
+  }
+
+  h2 {
+    font-size: 22px;
+    font-weight: 850;
+    color: #111827;
+    margin: 34px 0 16px 0;
+    padding: 9px 0;
+    border-bottom: 2px solid #e5e7eb;
+    line-height: 1.42;
+  }
+
+  h3 {
+    font-size: 18px;
+    font-weight: 800;
+    color: #b45309;
+    margin: 26px 0 12px 0;
+    line-height: 1.45;
+  }
+
+  h4 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #111827;
+    margin: 22px 0 10px 0;
+    line-height: 1.45;
+  }
+
+  p {
+    font-size: 16px;
+    line-height: 1.84;
+    color: #111827;
+    margin: 13px 0;
+  }
+
+  strong {
+    font-weight: 850;
+    color: #b45309;
+  }
+
+  em {
+    font-style: italic;
+    color: #4b5563;
+  }
+
+  code {
+    font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 13.6px;
+    background: #f8fafc;
+    color: #b45309;
+    padding: 3px 6px;
+    border-radius: 4px;
+  }
+
+  pre {
+    background: #111827;
+    color: #f3f4f6;
+    padding: 16px;
+    border-radius: 4px;
+    overflow-x: auto;
+    margin: 18px 0;
+    line-height: 1.6;
+    border: 1px solid #374151;
+  }
+
+  pre code {
+    font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 13.6px;
+    background: none;
+    color: #f3f4f6;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  blockquote {
+    border-left: 4px solid #d97706;
+    background: #fff7ed;
+    margin: 18px 0;
+    padding: 12px 16px;
+    border-radius: 0 4px 4px 0;
+    color: #431407;
+  }
+
+  blockquote p {
+    margin: 8px 0;
+    color: #431407;
+  }
+
+  ul {
+    padding-left: 24px;
+    margin: 13px 0;
+  }
+
+  ol {
+    padding-left: 24px;
+    margin: 13px 0;
+  }
+
+  li {
+    font-size: 16px;
+    line-height: 1.82;
+    color: #111827;
+    margin: 6px 0;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 18px 0;
+    font-size: 15px;
+  }
+
+  thead {
+    background: #111827;
+  }
+
+  th {
+    background: #111827;
+    color: #ffffff;
+    font-weight: 850;
+    padding: 10px 14px;
+    text-align: left;
+    border: 1px solid #111827;
+  }
+
+  td {
+    padding: 10px 14px;
+    border: 1px solid #e5e7eb;
+    color: #111827;
+  }
+
+  tr {
+    background: #ffffff;
+  }
+
+  img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 26px auto;
+    border-radius: 4px;
+  }
+
+  a {
+    color: #b45309;
+    text-decoration: none;
+    font-weight: 650;
+  }
+
+  hr {
+    border: none;
+    border-top: 2px solid #f59e0b;
+    margin: 30px 0;
+  }

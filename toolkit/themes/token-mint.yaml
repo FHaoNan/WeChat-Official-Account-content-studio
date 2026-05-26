@@ -1,0 +1,200 @@
+name: "token-mint"
+description: "烧 Token 的人轮换主题：石墨薄荷，浅冷绿底，适合工程科普、Agent、工具体验"
+colors:
+  primary: "#14b8a6"
+  secondary: "#0f766e"
+  text: "#10201d"
+  text_light: "#49635e"
+  background: "#f7fbfa"
+  code_bg: "#ecfdf5"
+  code_color: "#0f766e"
+  quote_border: "#14b8a6"
+  quote_bg: "#ecfdf5"
+  border_radius: "8px"
+  darkmode:
+    background: "#071a17"
+    text: "#d9f5ef"
+    text_light: "#8db7ae"
+    primary: "#5eead4"
+    code_bg: "#0b2722"
+    code_color: "#99f6e4"
+    quote_bg: "#0d302a"
+    quote_border: "#5eead4"
+base_css: |
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+    font-size: 16px;
+    line-height: 1.8;
+    color: #10201d;
+    background: #f7fbfa;
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 20px;
+    word-wrap: break-word;
+  }
+
+  h1 {
+    font-size: 24px;
+    font-weight: 850;
+    color: #10201d;
+    margin: 30px 0 16px 0;
+    padding: 0 0 0 12px;
+    border-left: 5px solid #14b8a6;
+    border-bottom: none;
+    line-height: 1.28;
+  }
+
+  h2 {
+    font-size: 20px;
+    font-weight: 800;
+    color: #10201d;
+    margin: 30px 0 14px 0;
+    padding: 0 0 8px 0;
+    border-left: none;
+    border-bottom: 1px solid #cfe5df;
+    line-height: 1.4;
+  }
+
+  h3 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f766e;
+    margin: 26px 0 12px 0;
+    line-height: 1.45;
+  }
+
+  h4 {
+    font-size: 16px;
+    font-weight: 700;
+    color: #10201d;
+    margin: 22px 0 10px 0;
+    line-height: 1.45;
+  }
+
+  p {
+    font-size: 16px;
+    line-height: 1.8;
+    color: #263b37;
+    margin: 12px 0;
+  }
+
+  strong {
+    font-weight: 800;
+    color: #0f766e;
+  }
+
+  em {
+    font-style: italic;
+    color: #49635e;
+  }
+
+  code {
+    font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 13.6px;
+    background: #ecfdf5;
+    color: #0f766e;
+    padding: 3px 6px;
+    border-radius: 6px;
+  }
+
+  pre {
+    background: #10201d;
+    color: #d9f5ef;
+    padding: 16px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 18px 0;
+    line-height: 1.6;
+    border: 1px solid #21443d;
+  }
+
+  pre code {
+    font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 13.6px;
+    background: none;
+    color: #d9f5ef;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  blockquote {
+    border-left: 4px solid #14b8a6;
+    background: #ecfdf5;
+    margin: 16px 0;
+    padding: 12px 16px;
+    border-radius: 0 8px 8px 0;
+    color: #103b34;
+  }
+
+  blockquote p {
+    margin: 8px 0;
+    color: #103b34;
+  }
+
+  ul {
+    padding-left: 24px;
+    margin: 13px 0;
+  }
+
+  ol {
+    padding-left: 24px;
+    margin: 13px 0;
+  }
+
+  li {
+    font-size: 16px;
+    line-height: 1.82;
+    color: #10201d;
+    margin: 6px 0;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 14px;
+  }
+
+  thead {
+    background: #f1fffb;
+  }
+
+  th {
+    background: #f1fffb;
+    color: #0f766e;
+    font-weight: 800;
+    padding: 8px 12px;
+    text-align: left;
+    border: 1px solid #cfe5df;
+    border-bottom: 2px solid #14b8a6;
+  }
+
+  td {
+    padding: 8px 12px;
+    border: 1px solid #d7ece8;
+    color: #10201d;
+  }
+
+  tr {
+    background: #ffffff;
+  }
+
+  img {
+    max-width: 100%;
+    height: auto;
+    display: block;
+    margin: 24px auto;
+    border-radius: 8px;
+  }
+
+  a {
+    color: #0f766e;
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid #cfe5df;
+    margin: 28px 0;
+  }
