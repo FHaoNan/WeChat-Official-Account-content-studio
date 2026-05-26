@@ -9,6 +9,8 @@ Usage:
 """
 
 import argparse
+import contextlib
+import io
 import json
 import os
 import re
@@ -122,11 +124,16 @@ def run_python_script_capture(script: Path, args: list[str]) -> tuple[int, str, 
     return int(completed.returncode), completed.stdout, completed.stderr
 
 
-def create_article_directory(title: str, author: str = "", source_url: str = "", *, force: bool = False) -> dict[str, str]:
-    folder_name = safe_folder_name(title)
+def output_root_path() -> Path:
     output_root = Path(os.environ.get("WEWRITE_OUTPUT_ROOT", str(SKILL_ROOT / "output"))).expanduser()
     if not output_root.is_absolute():
         output_root = (SKILL_ROOT / output_root).resolve()
+    return output_root
+
+
+def create_article_directory(title: str, author: str = "", source_url: str = "", *, force: bool = False) -> dict[str, str]:
+    folder_name = safe_folder_name(title)
+    output_root = output_root_path()
     article_dir = output_root / folder_name
     if article_dir.exists() and not force:
         raise FileExistsError(f"Article folder already exists: {article_dir}")
@@ -396,6 +403,112 @@ def cmd_draft_from_topic(args) -> int:
         "title": title,
         "render": json.loads(render_stdout) if render_stdout.strip().startswith("{") else {"stdout": render_stdout.strip()},
         "quality_gates_exit_code": gate_code,
+        "artifacts": artifacts,
+    }
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+def cmd_auto_draft(args) -> int:
+    output_root = output_root_path()
+    pipeline_dir = output_root / "_auto-draft" / safe_folder_name(Path(args.hotspots).stem or "hotspots")
+    pipeline_dir.mkdir(parents=True, exist_ok=True)
+    selected_topics_path = pipeline_dir / "selected-topics.json"
+    topic_with_sources_path = pipeline_dir / "topic-with-sources.json"
+    sources_path = pipeline_dir / "sources.json"
+    research_report_path = pipeline_dir / "research-report.json"
+
+    select_args = [
+        "--hotspots", str(Path(args.hotspots).expanduser()),
+        "--style", str(Path(args.style).expanduser()),
+        "--limit", str(args.limit),
+        "--json",
+        "--output", str(selected_topics_path),
+    ]
+    if args.prefilter_limit:
+        select_args.extend(["--prefilter-limit", str(args.prefilter_limit)])
+    if args.llm_rerank:
+        select_args.append("--llm-rerank")
+    if args.llm_fixture:
+        select_args.extend(["--llm-fixture", str(Path(args.llm_fixture).expanduser())])
+    if args.config:
+        select_args.extend(["--config", str(Path(args.config).expanduser())])
+
+    select_code, select_stdout, select_stderr = run_python_script_capture(SKILL_ROOT / "scripts" / "select_ai_topics.py", select_args)
+    if select_code != 0:
+        if select_stdout:
+            print(select_stdout, file=sys.stderr, end="")
+        if select_stderr:
+            print(select_stderr, file=sys.stderr, end="")
+        return select_code
+    selected_topics = json.loads(selected_topics_path.read_text(encoding="utf-8"))
+    if not selected_topics.get("topics"):
+        print(json.dumps({"success": False, "error": "No eligible topics selected", "artifacts": {"selected_topics": str(selected_topics_path)}}, ensure_ascii=False), file=sys.stderr)
+        return 1
+
+    research_args = [
+        "--topic-file", str(selected_topics_path),
+        "--topic-output", str(topic_with_sources_path),
+        "--output", str(sources_path),
+        "--report-output", str(research_report_path),
+        "--per-query-limit", str(args.per_query_limit),
+        "--max-sources", str(args.max_sources),
+        "--timeout-seconds", str(args.timeout_seconds),
+        "--json",
+    ]
+    if args.topic_index is not None:
+        research_args.extend(["--topic-index", str(args.topic_index)])
+    if args.search_fixture:
+        research_args.extend(["--search-fixture", str(Path(args.search_fixture).expanduser())])
+    if args.no_network:
+        research_args.append("--no-network")
+    if args.allow_incomplete_sources:
+        research_args.append("--allow-incomplete")
+
+    research_code, research_stdout, research_stderr = run_python_script_capture(SKILL_ROOT / "scripts" / "research_sources.py", research_args)
+    if research_stderr:
+        print(research_stderr, file=sys.stderr, end="")
+    if research_code != 0 and not args.allow_incomplete_sources:
+        if research_stdout:
+            print(research_stdout, file=sys.stderr, end="")
+        return research_code
+    research_report = json.loads(research_report_path.read_text(encoding="utf-8")) if research_report_path.exists() else json.loads(research_stdout)
+
+    draft_args = argparse.Namespace(
+        topic_file=str(topic_with_sources_path),
+        topic_index=args.topic_index,
+        title=args.title,
+        author=args.author or "烧 Token 的人",
+        force=args.force,
+        theme=args.theme,
+        strict_check=args.strict_check,
+    )
+    stdout_buffer = io.StringIO()
+    with contextlib.redirect_stdout(stdout_buffer):
+        draft_code = cmd_draft_from_topic(draft_args)
+    draft_stdout = stdout_buffer.getvalue()
+    if draft_code != 0:
+        if draft_stdout:
+            print(draft_stdout, file=sys.stderr, end="")
+        return draft_code
+    draft_payload = json.loads(draft_stdout)
+    artifacts = {
+        "selected_topics": str(selected_topics_path),
+        "topic_with_sources": str(topic_with_sources_path),
+        "research_sources": str(sources_path),
+        "research_report": str(research_report_path),
+        "article_dir": draft_payload["article_dir"],
+        **draft_payload.get("artifacts", {}),
+    }
+    result = {
+        "success": True,
+        "article_dir": draft_payload["article_dir"],
+        "title": draft_payload.get("title", ""),
+        "pipeline": {
+            "selected_topics": {"count": int(selected_topics.get("count", len(selected_topics.get("topics", [])))), "llm_rerank": selected_topics.get("llm_rerank", {})},
+            "research_sources": {"summary": research_report.get("summary", {})},
+            "draft": {"quality_gates_exit_code": draft_payload.get("quality_gates_exit_code")},
+        },
         "artifacts": artifacts,
     }
     print(json.dumps(result, ensure_ascii=False, indent=2))
@@ -773,9 +886,30 @@ def main():
     p_draft_topic.add_argument("--topic-index", type=int, default=None, help="Index inside topics[]; default picks first auto-writeable topic")
     p_draft_topic.add_argument("--title", default="", help="Override article title")
     p_draft_topic.add_argument("--author", default="烧 Token 的人", help="Article author")
-    p_draft_topic.add_argument("--theme", default="", help="Override render theme")
-    p_draft_topic.add_argument("--force", action="store_true", help="Overwrite existing article folder files")
-    p_draft_topic.add_argument("--strict-check", action="store_true", help="Return non-zero if quality gates have non-pass items")
+    p_draft_topic.add_argument("--theme", default="", help="Render theme override")
+    p_draft_topic.add_argument("--strict-check", action="store_true", help="Return non-zero if quality gates fail")
+    p_draft_topic.add_argument("--force", action="store_true", help="Overwrite existing article folder")
+
+    p_auto_draft = sub.add_parser("auto-draft", help="Select topic, research sources, create draft, render and run gates")
+    p_auto_draft.add_argument("--hotspots", required=True, help="Hotspots JSON from fetch_hotspots.py")
+    p_auto_draft.add_argument("--limit", type=int, default=1, help="Number of candidate topics to select before drafting")
+    p_auto_draft.add_argument("--topic-index", type=int, default=None, help="Index inside selected topics[] for research/draft; default first auto-writeable")
+    p_auto_draft.add_argument("--style", default=str(SKILL_ROOT / "style.yaml"), help="style.yaml path for topic selection")
+    p_auto_draft.add_argument("--author", default="烧 Token 的人", help="Article author")
+    p_auto_draft.add_argument("--title", default="", help="Override final article title")
+    p_auto_draft.add_argument("--theme", default="", help="Render theme override")
+    p_auto_draft.add_argument("--strict-check", action="store_true", help="Return non-zero if final quality gates fail")
+    p_auto_draft.add_argument("--force", action="store_true", help="Overwrite existing article folder")
+    p_auto_draft.add_argument("--search-fixture", default="", help="Fixture JSON for deterministic/offline source research")
+    p_auto_draft.add_argument("--no-network", action="store_true", help="Do not call web search during source research")
+    p_auto_draft.add_argument("--allow-incomplete-sources", action="store_true", help="Continue even if research source mix is incomplete")
+    p_auto_draft.add_argument("--per-query-limit", type=int, default=6)
+    p_auto_draft.add_argument("--max-sources", type=int, default=12)
+    p_auto_draft.add_argument("--timeout-seconds", type=float, default=12.0)
+    p_auto_draft.add_argument("--prefilter-limit", type=int, default=20, help="Heuristic candidate count before optional LLM rerank")
+    p_auto_draft.add_argument("--llm-rerank", action="store_true", help="Enable optional LLM rerank in topic selection")
+    p_auto_draft.add_argument("--llm-fixture", default="", help="Fixture JSON for topic-selection LLM review")
+    p_auto_draft.add_argument("--config", default=str(SKILL_ROOT / "config.yaml"), help="config.yaml for optional LLM rerank")
 
     # preview
     p_preview = sub.add_parser("preview", help="Generate HTML and open in browser")
@@ -824,6 +958,8 @@ def main():
             sys.exit(cmd_publish_draft(args))
         elif args.command == "draft-from-topic":
             sys.exit(cmd_draft_from_topic(args))
+        elif args.command == "auto-draft":
+            sys.exit(cmd_auto_draft(args))
         elif args.command == "preview":
             cmd_preview(args)
         elif args.command == "publish":

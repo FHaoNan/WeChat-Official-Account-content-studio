@@ -190,6 +190,47 @@ class CliWorkflowTests(unittest.TestCase):
         self.assertIn("sources_json", payload["artifacts"])
         self.assertIn("quality_gates", payload["artifacts"])
 
+    def test_auto_draft_runs_topic_selection_research_and_draft_pipeline(self):
+        hotspots = self.tmp / "hotspots.json"
+        hotspots.write_text(json.dumps({
+            "items": [
+                {"title": "OpenAI 发布 Agent 新功能引发成本讨论", "source": "微博", "hot_normalized": 95, "url": "https://example.com/hot"},
+                {"title": "某明星机场穿搭", "source": "微博", "hot_normalized": 100, "url": "https://example.com/skip"},
+            ]
+        }, ensure_ascii=False), encoding="utf-8")
+        fixture = self.tmp / "search-results.json"
+        fixture.write_text(json.dumps({
+            "results": [
+                {"title": "OpenAI tools docs", "url": "https://platform.openai.com/docs/guides/tools"},
+                {"title": "HN Agent cost discussion", "url": "https://news.ycombinator.com/item?id=123"},
+                {"title": "Reuters AI agents", "url": "https://www.reuters.com/technology/artificial-intelligence/example"},
+            ]
+        }, ensure_ascii=False), encoding="utf-8")
+
+        proc = self.run_cli(
+            "auto-draft",
+            "--hotspots", str(hotspots),
+            "--search-fixture", str(fixture),
+            "--limit", "1",
+            "--author", "烧 Token 的人",
+        )
+        payload = json.loads(proc.stdout)
+        self.assertTrue(payload["success"])
+        self.assertEqual(payload["pipeline"]["selected_topics"]["count"], 1)
+        self.assertTrue(payload["pipeline"]["research_sources"]["summary"]["passed"])
+        article_dir = Path(payload["article_dir"])
+        self.assertTrue((article_dir / "article.md").exists())
+        self.assertTrue((article_dir / "preview.html").exists())
+        self.assertTrue((article_dir / "generated" / "sources.json").exists())
+        self.assertTrue((article_dir / "generated" / "source-report.json").exists())
+        source_report = json.loads((article_dir / "generated" / "source-report.json").read_text(encoding="utf-8"))
+        self.assertTrue(source_report["summary"]["passed"])
+        artifacts = payload["artifacts"]
+        self.assertTrue(Path(artifacts["selected_topics"]).exists())
+        self.assertTrue(Path(artifacts["topic_with_sources"]).exists())
+        self.assertTrue(Path(artifacts["research_report"]).exists())
+        self.assertEqual(Path(artifacts["article_dir"]), article_dir)
+
 
 if __name__ == "__main__":
     unittest.main()
