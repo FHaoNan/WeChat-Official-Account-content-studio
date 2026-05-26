@@ -157,6 +157,8 @@ python3 {skill_dir}/scripts/seo_keywords.py --json {关键词}
 
 选题已经补齐三类 URL 来源后，可一键串联生成草稿和报告：`python3 {skill_dir}/toolkit/cli.py draft-from-topic --topic-file {topic_json} --author "烧 Token 的人"`。该命令会创建标准文章目录，写入 `article.md`、`generated/sources.json`、`generated/topic.json`，并自动执行 render 与 quality gates（含 source gate）。如果希望质量门禁非 pass 时直接返回非 0，加 `--strict-check`。注意：该命令不会编造 URL；没有可验证 URL 时会生成草稿，但 `source_credibility` 会 fail，必须先补证。
 
+如果 topic 只有 `overseas_evidence_plan` / `overseas_evidence.directions`，先运行 P4 补证：`python3 {skill_dir}/scripts/research_sources.py --topic-file {topic_json} --topic-output {topic_with_sources_json} --output {sources_json} --json`。该脚本会把补证方向转成搜索 query，抓取候选 URL，复用 `source_gate.py` 分类，要求 primary + community + media_or_secondary 三类齐全；找不齐默认返回非 0。测试或离线运行可用 `--search-fixture fixture.json`；探索性运行才使用 `--allow-incomplete`。
+
 选题必须遵循 `references/topic-selection.md` 的原则：**国内热点发现，海外信息补证**。国内热搜只解决选题入口，后续事实素材、技术判断、模型能力、产品细节和产业链证据仍必须回到 Step 3b 的 `source_policy` 检索与交叉验证。
 
 - 自动模式 → 选最高分
