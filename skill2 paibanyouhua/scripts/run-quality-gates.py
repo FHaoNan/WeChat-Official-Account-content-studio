@@ -184,12 +184,14 @@ def main() -> int:
     diagnose_path = generated_dir / "diagnose-report.json"
     doctor_path = generated_dir / "article-doctor-report.json"
     seo_path = generated_dir / "seo-report.json"
+    source_path = generated_dir / "source-report.json"
 
     checks: list[dict] = []
     artifacts: dict[str, object] = {
         "diagnose_report": str(diagnose_path),
         "article_doctor_report": str(doctor_path),
         "seo_report": str(seo_path),
+        "source_report": str(source_path),
     }
 
     article_path = article_dir / "article.md"
@@ -384,6 +386,23 @@ def main() -> int:
             add_check(checks, "seo_keywords", status, f"title seo_score={seo_score}", data=primary)
     else:
         add_check(checks, "seo_keywords", "fail", "title missing, cannot run seo_keywords.py")
+
+    source_result, source_error = run_json_command([
+        sys.executable,
+        str(REPO_ROOT / "scripts" / "source_gate.py"),
+        "--article-dir",
+        str(article_dir),
+        "--json",
+    ])
+    if source_result is None:
+        add_check(checks, "source_credibility", "fail", f"source_gate.py failed: {source_error}")
+    else:
+        source_path.write_text(json.dumps(source_result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        source_summary = source_result.get("summary", {}) if isinstance(source_result, dict) else {}
+        source_passed = bool(source_summary.get("passed"))
+        missing_categories = source_summary.get("missing_categories", []) or []
+        detail = "source evidence mix ok" if source_passed else f"missing source categories: {', '.join(missing_categories)}"
+        add_check(checks, "source_credibility", "pass" if source_passed else "fail", detail, data=source_summary)
 
     report = {
         "article_dir": str(article_dir),

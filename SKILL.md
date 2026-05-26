@@ -280,6 +280,7 @@ WebSearch: "{选题关键词} 数据 报告 2025 2026"
   - `python3 {skill_dir}/scripts/diagnose.py --json` → `diagnose-report.json`
   - `python3 {skill_dir}/toolkit/cli.py check --article-dir "{article_dir}"` 会串联 Python article-doctor fallback（Windows 可继续由 wrapper 调用 PowerShell doctor）→ `article-doctor-report.json`
   - `python3 {skill_dir}/scripts/seo_keywords.py --json "{title}"` → `seo-report.json`
+  - `python3 {skill_dir}/scripts/source_gate.py --article-dir "{article_dir}" --json` → `source-report.json`
   - `python3 {skill_dir}/skill2 paibanyouhua/scripts/run-quality-gates.py --article-dir "{article_dir}" --strict` → `quality-gates.json`
 - 上述脚本不是可选项；以后凡是走这个 skill 的默认主链，都必须执行并落报告。
 - **零 warning 发布门槛**：`quality-gates.json` 的 `summary.fail`、`summary.warn`、`summary.skip` 必须全部为 0 才能继续；任何 warning 都必须先修复，禁止继续推草稿箱。
