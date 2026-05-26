@@ -365,8 +365,28 @@ def cmd_draft_from_topic(args) -> int:
     article_dir = Path(created["article_dir"])
     generated_dir = article_dir / "generated"
     write_utf8(article_dir / "article.md", _build_topic_article(topic, sources))
-    write_utf8(generated_dir / "sources.json", json.dumps({"sources": sources}, ensure_ascii=False, indent=2) + "\n")
-    write_utf8(generated_dir / "topic.json", json.dumps(topic, ensure_ascii=False, indent=2) + "\n")
+    sources_json_path = generated_dir / "sources.json"
+    topic_json_path = generated_dir / "topic.json"
+    evidence_ledger_path = generated_dir / "evidence-ledger.json"
+    write_utf8(sources_json_path, json.dumps({"sources": sources}, ensure_ascii=False, indent=2) + "\n")
+    write_utf8(topic_json_path, json.dumps(topic, ensure_ascii=False, indent=2) + "\n")
+    writer_script = SKILL_ROOT / "scripts" / "draft_writer.py"
+    writer_code, writer_stdout, writer_stderr = run_python_script_capture(
+        writer_script,
+        [
+            "--topic-file", str(topic_json_path),
+            "--sources-file", str(sources_json_path),
+            "--output", str(article_dir / "article.md"),
+            "--ledger-output", str(evidence_ledger_path),
+            "--json",
+        ],
+    )
+    if writer_code != 0:
+        if writer_stdout:
+            print(writer_stdout, file=sys.stderr, end="")
+        if writer_stderr:
+            print(writer_stderr, file=sys.stderr, end="")
+        return writer_code
     _write_placeholder_assets(article_dir)
 
     render_script = SKILL_ROOT / "skill2 paibanyouhua" / "scripts" / "render-article.py"
@@ -394,6 +414,8 @@ def cmd_draft_from_topic(args) -> int:
         "article_md": str(article_dir / "article.md"),
         "preview_html": str(article_dir / "preview.html"),
         "sources_json": str(generated_dir / "sources.json"),
+        "topic_json": str(generated_dir / "topic.json"),
+        "evidence_ledger": str(generated_dir / "evidence-ledger.json"),
         "source_report": str(generated_dir / "source-report.json"),
         "quality_gates": str(generated_dir / "quality-gates.json"),
     }
