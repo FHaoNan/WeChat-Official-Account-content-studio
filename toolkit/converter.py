@@ -633,6 +633,14 @@ class WeChatConverter:
             ctype = match.group(1).strip().lower()
             content = match.group(2).strip()
             color, bg, icon = colors_map.get(ctype, colors_map["info"])
+            if self._theme.name.startswith("token-"):
+                border = f"border: 1px solid {color}33;" if self._theme.name == "token-mint" else "border: none;"
+                return (
+                    f'<section style="background: {bg}; {border} border-left: 4px solid {color}; '
+                    f'padding: 12px 14px; border-radius: {profile["shape"]}; margin: 16px 0; '
+                    f'font-size: 14px; line-height: 1.7; color: {profile["text"]}">'
+                    f'{content}</section>'
+                )
             if variant == "focus":
                 return (
                     f'<section style="background: {bg}; border-top: 4px solid {color}; border-bottom: 1px solid {color}; '
@@ -676,6 +684,12 @@ class WeChatConverter:
 
         def replace_quote(match):
             content = match.group(1).strip()
+            if self._theme.name.startswith("token-"):
+                return (
+                    f'<section style="margin: 22px 0; padding: 12px 0 12px 14px; border-left: 4px solid {primary}">'
+                    f'<section style="font-size: 17px; line-height: 1.8; color: {profile["text"]}; font-weight: 750">'
+                    f'{content}</section></section>'
+                )
             if variant == "focus":
                 return (
                     f'<section style="margin: 26px 0; padding: 18px 0; border-top: 3px solid {primary}; border-bottom: 1px solid {primary}">'

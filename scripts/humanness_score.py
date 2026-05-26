@@ -37,6 +37,7 @@ BANNED_WORDS = [
     "值得注意的是",
     "需要指出的是",
     "不可否认",
+    "毋庸置疑",
     "众所周知",
     "事实上",
     "显而易见",
@@ -44,6 +45,7 @@ BANNED_WORDS = [
     "从某种意义上说",
     "非常重要",
     "至关重要",
+    "不言而喻",
     "具有重要意义",
     "发挥着重要作用",
     "意义深远",
@@ -59,6 +61,8 @@ BANNED_WORDS = [
 
 REAL_SOURCE_PATTERNS = [
     r"[A-Z][a-z]+\s+[A-Z][a-z]+",
+    r"(?:OpenAI|Anthropic|Google DeepMind|Meta AI|Microsoft|NVIDIA|Hugging Face|GitHub|arXiv|Reuters|Bloomberg|Financial Times|Wall Street Journal|The Information|The Verge|TechCrunch|Wired|MIT Technology Review|Reddit|Hacker News|YouTube)",
+    r"(?:openai\.com|anthropic\.com|deepmind\.google|ai\.meta\.com|microsoft\.com|nvidia\.com|huggingface\.co|github\.com|arxiv\.org|reuters\.com|bloomberg\.com|ft\.com|wsj\.com|theinformation\.com|theverge\.com|techcrunch\.com|wired\.com|technologyreview\.com|x\.com|reddit\.com|youtube\.com)",
     r"[\u4e00-\u9fff]{2,4}(?:表示|指出|认为|写道|提到|说过|称)",
     r"(?:据|根据|来自)\s*[\u4e00-\u9fffA-Za-z0-9《》“”]+(?:报告|数据|研究|调查|统计)",
     r"20[12]\d(?:年|\b)",
@@ -75,10 +79,10 @@ BROKEN_SENTENCE_PATTERNS = [
 ]
 
 WORD_TEMPERATURE_BUCKETS = {
-    "cold": ["认知负荷", "信息不对称", "路径依赖", "商业模式", "生态位", "增量"],
-    "warm": ["说白了", "其实", "讲真", "说实话", "坦白讲", "懂的都懂", "怎么说呢"],
-    "hot": ["DNA动了", "格局打开", "遥遥领先", "内卷", "炸了", "杀疯了", "吃灰"],
-    "wild": ["整挺好", "不靠谱", "瞎折腾", "搁这儿", "糊弄", "扯", "怼"],
+    "professional": ["推理成本", "上下文窗口", "边际成本", "供需关系", "资本开支", "毛利率", "信息不对称", "延迟"],
+    "plain": ["说白了", "其实", "说实话", "坦白讲", "换句话说", "简单理解", "坑在这里"],
+    "engineering": ["token", "Token", "跑通", "调模型", "上下文", "调用链路", "日志", "接口", "API", "账单"],
+    "pointed": ["烧冒烟", "demo很猛", "demo 很猛", "账单很诚实", "不太买账", "有点虚", "别急着上头", "这事没那么玄"],
 }
 
 

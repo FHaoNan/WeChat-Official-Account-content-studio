@@ -15,6 +15,7 @@ history.yaml
 playbook.md
 corpus/
 lessons/
+.superpowers/
 
 # Optimized writing parameters (user runs loop to generate their own)
 writing-config.yaml

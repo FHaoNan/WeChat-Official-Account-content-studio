@@ -21,7 +21,7 @@ OUTPUT_ROOT = SKILL_ROOT / "output"
 LAYOUT_FAMILIES: dict[str, dict[str, Any]] = {
     "professional-info": {
         "variant": "info-flow",
-        "themes": ["bytedance", "github", "professional-clean"],
+        "themes": ["token-data", "token-clean", "bytedance", "github", "professional-clean"],
         "keywords": [
             "行业",
             "商业",
@@ -44,7 +44,7 @@ LAYOUT_FAMILIES: dict[str, dict[str, Any]] = {
     },
     "tech-magazine": {
         "variant": "tech-magazine",
-        "themes": ["tech-modern", "midnight", "bauhaus", "github"],
+        "themes": ["token-clean", "token-mint", "tech-modern", "midnight", "bauhaus", "github"],
         "keywords": [
             "AI",
             "Agent",
@@ -68,7 +68,7 @@ LAYOUT_FAMILIES: dict[str, dict[str, Any]] = {
     },
     "editorial-commentary": {
         "variant": "editorial",
-        "themes": ["sspai", "warm-editorial", "newspaper"],
+        "themes": ["token-clean", "token-mint", "sspai", "warm-editorial", "newspaper"],
         "keywords": [
             "观点",
             "评论",
@@ -371,8 +371,16 @@ def choose_theme(family: str, title: str, recent: list[dict[str, Any]], fallback
         score -= usage[theme] * 4
         score -= recent_themes[:1].count(theme) * 20
         score -= recent_themes[:2].count(theme) * 12
+        if fallback.startswith("token-") and theme.startswith("token-"):
+            score += 12
+        if family == "professional-info" and theme == "token-data":
+            score += 10
+        if family == "tech-magazine" and theme in {"token-clean", "token-mint"}:
+            score += 8
+        if family == "editorial-commentary" and theme == "token-mint":
+            score += 6
         if theme == fallback:
-            score -= 8
+            score += 4
         score -= order
         scored.append((theme, score))
     scored.sort(key=lambda item: item[1], reverse=True)
