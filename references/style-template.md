@@ -18,7 +18,7 @@ topics:                    # 内容方向（列表）
   - "方向2"
 tone: "写作风格描述"
 theme_mode: "auto"          # auto 自动轮换；fixed 固定使用 theme
-theme: "professional-clean" # auto 模式下作为兜底主题
+theme: "token-clean"        # auto 模式下作为兜底主题
 ```
 
 ## 可选字段
@@ -32,6 +32,21 @@ blacklist:
   words: ["禁忌词1", "禁忌词2"]
   topics: ["禁忌话题1"]
 reference_accounts: ["参考账号1", "参考账号2"]
+topic_policy:
+  hotspot_principle: "国内热点发现，海外信息补证；不追纯热搜，要把热点翻译成账号能讲清楚的问题"
+  hotspot_sources: ["微博热搜", "百度热搜", "今日头条热榜", "微信指数/搜一搜趋势", "知乎热榜"]
+  scoring_bias:
+    - "优先选择和账号定位强相关、能解释机制或方法的热点"
+    - "热度高但没有解释价值的热点降权"
+source_policy:
+  principle: "优先使用哪些信息源，以及哪些来源不能作为默认事实来源"
+  preferred_platforms: ["x.com", "reddit.com", "github.com", "youtube.com"]
+  preferred_media: ["reuters.com", "bloomberg.com", "ft.com"]
+  avoid_as_primary_sources: ["mp.weixin.qq.com", "zhihu.com"]
+  source_rules:
+    - "社交平台可作为线索，重大事实必须交叉验证"
+  search_queries:
+    - "{选题关键词英文} site:x.com OR site:reddit.com OR site:github.com"
 cover_style: "封面风格描述"
 cover_template: "/path/to/cover.png"  # 设置后跳过 AI 生成封面
 author: "署名"
@@ -43,7 +58,7 @@ author: "署名"
 
 ```yaml
 theme_mode: "auto"
-theme: "professional-clean"
+theme: "token-clean"
 ```
 
 渲染时会根据文章内容、最近文章的主题/版式记录自动选择新的 `theme`、`layout_family` 和容器样式。只有明确想固定一种视觉时，才改成：
@@ -59,6 +74,9 @@ theme: "sspai"
 
 | 主题 | 说明 |
 |------|------|
+| token-clean | 烧 Token 的人主主题（冷白底、石墨文字、青绿色强调） |
+| token-mint | 烧 Token 的人轮换主题（石墨薄荷，适合工程科普/工具体验） |
+| token-data | 烧 Token 的人数据新闻主题（白底黑字、琥珀强调，适合产业链/商业分析） |
 | professional-clean | 专业简洁（默认，适合大部分商业内容） |
 | tech-modern | 科技风（蓝紫渐变，适合技术/产品类） |
 | warm-editorial | 暖色编辑风（适合生活/文化类） |
@@ -80,9 +98,9 @@ theme: "sspai"
 
 如果你不想每次都用同一种气质，可以按内容类型选主题：
 
-- 行业分析、商业热点：`professional-clean`、`bytedance`、`github`
-- AI、科技、未来趋势：`tech-modern`、`midnight`、`bauhaus`
-- 评论、观察、编辑部气质：`sspai`、`warm-editorial`、`newspaper`
+- 行业分析、商业热点：`token-data`、`token-clean`、`professional-clean`、`bytedance`、`github`
+- AI、科技、未来趋势：`token-clean`、`token-mint`、`tech-modern`、`midnight`、`bauhaus`
+- 评论、观察、编辑部气质：`token-clean`、`token-mint`、`sspai`、`warm-editorial`、`newspaper`
 - 强观点、快评、结论感强：`focus-red`、`bold-navy`、`bold-green`
 - 留白克制、文化品牌：`minimal`、`minimal-gold`、`ink`
 - 审美、生活方式、女性向：`elegant-rose`、`warm-editorial`
