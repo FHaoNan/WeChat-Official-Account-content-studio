@@ -58,7 +58,7 @@ allowed-tools:
 
 **文章产物约定**：
 - 新稿件默认目录：`article_dir = {skill_dir}/output/{工作标题}/`
-- 目录统一通过 `powershell -ExecutionPolicy Bypass -File {skill_dir}/scripts/new_wechat_article.ps1 -Title "{工作标题}" -Author "{style.author}"` 创建，不再手动拼旧 `output/` 路径。
+- 目录统一通过 `python3 {skill_dir}/toolkit/cli.py new --title "{工作标题}" --author "{style.author}"` 创建；Windows PowerShell wrapper 只做薄转发，不再承载主逻辑。
 - `article.md` 是唯一正文源文件；`article-body.template.html`、`preview.html`、`generated/output.html`、`generated/draft.json` 都由模板脚本自动生成。
 - 图片统一放在 `assets/`，配图提示词统一放在 `generated/image-prompts.md`。
 - 图位文件名必须稳定；后续替换图片时，优先直接覆盖 `assets/` 里的同名文件，不要反复改 Markdown 路径。
@@ -116,7 +116,7 @@ cd {skill_dir} && git fetch origin main --quiet 2>/dev/null
 检查: {skill_dir}/style.yaml
 ```
 
-- 存在 → 提取 `name`、`topics`、`tone`、`voice`、`blacklist`、`theme_mode`、`theme`、`cover_style`、`author`、`content_style`
+- 存在 → 提取 `name`、`topics`、`tone`、`voice`、`blacklist`、`theme_mode`、`theme`、`cover_style`、`author`、`content_style`、`topic_policy`、`source_policy`
 - 不存在 → `读取: {skill_dir}/references/onboard.md`，完成后回到 Step 1
 
 如果用户直接给了选题 → 跳到 Step 3（仍需框架选择和素材采集，不可跳过）。
@@ -125,7 +125,9 @@ cd {skill_dir} && git fetch origin main --quiet 2>/dev/null
 
 ### Step 2: 选题
 
-**2a. 热点抓取**：
+**2a. 热点抓取（国内注意力入口）**：
+
+热点入口默认保留国内平台，因为公众号读者的注意力和转发语境主要发生在国内。抓热点只用于发现“读者正在关心什么”，不等于素材事实来源。
 
 ```bash
 python3 {skill_dir}/scripts/fetch_hotspots.py --limit 30
@@ -151,7 +153,9 @@ python3 {skill_dir}/scripts/seo_keywords.py --json {关键词}
 读取: {skill_dir}/references/topic-selection.md
 ```
 
-每个选题含标题、评分、点击率潜力、SEO 友好度、推荐框架。近 7 天已写的关键词降分。
+优先运行：`python3 {skill_dir}/scripts/select_ai_topics.py --hotspots {hotspots_json} --style {skill_dir}/style.yaml --limit 10`。需要 AI 主编复评时显式加 `--llm-rerank --config {skill_dir}/config.yaml --prefilter-limit 20`；LLM rerank 默认关闭，配置缺失或调用失败时必须 fallback 到启发式排序。每个选题含标题、国内热点来源、AI 工程师问题、评分、点击率潜力、SEO 友好度、推荐框架、海外补证方向和风险提醒；启用 LLM 后额外输出 `llm_review`、`final_score`，并在 `llm_review` 内给出 `token_burner_angle`、`overseas_evidence_plan`。近 7 天已写的关键词降分。
+
+选题必须遵循 `references/topic-selection.md` 的原则：**国内热点发现，海外信息补证**。国内热搜只解决选题入口，后续事实素材、技术判断、模型能力、产品细节和产业链证据仍必须回到 Step 3b 的 `source_policy` 检索与交叉验证。
 
 - 自动模式 → 选最高分
 - 交互模式 → 展示 10 个，等用户选
@@ -173,6 +177,19 @@ python3 {skill_dir}/scripts/seo_keywords.py --json {关键词}
 纯 LLM 生成的内容无论技巧多好，底层 token 分布仍是 AI 的。通过检测的文章都建立在真实外部信息源之上。
 
 如果用户直接给了 `x.com` / `twitter.com` 链接，先读取：`{skill_dir}/references/x-link-workflow.md`
+
+先读取 `style.yaml` 的 `source_policy`（如果存在）。`reference_accounts` 只用于风格参考，禁止当作默认信息源。
+
+如果 `source_policy` 存在，先把中文选题翻译成英文关键词，优先按 `source_policy.search_queries` 检索，并执行 `source_policy.source_rules`。默认检索口径：
+
+```
+WebSearch: "{选题关键词英文} site:x.com OR site:twitter.com OR site:reddit.com OR site:news.ycombinator.com"
+WebSearch: "{选题关键词英文} site:github.com OR site:arxiv.org OR site:huggingface.co"
+WebSearch: "{选题关键词英文} site:youtube.com official demo interview launch"
+WebSearch: "{选题关键词英文} site:reuters.com OR site:bloomberg.com OR site:ft.com OR site:wsj.com OR site:theinformation.com"
+```
+
+如果 `source_policy` 不存在，使用通用默认口径：
 
 ```
 WebSearch: "{选题关键词} site:36kr.com OR site:mp.weixin.qq.com OR site:zhihu.com"
@@ -209,7 +226,7 @@ WebSearch: "{选题关键词} 数据 报告 2025 2026"
 
 **4c-0. 创建文章目录**：
 - 根据当前工作标题/选题确定最终工作标题
-- 运行：`powershell -ExecutionPolicy Bypass -File {skill_dir}/scripts/new_wechat_article.ps1 -Title "{工作标题}" -Author "{style.author}"`
+- 运行：`python3 {skill_dir}/toolkit/cli.py new --title "{工作标题}" --author "{style.author}"`
 - 后续正文统一写在 `{skill_dir}/output/{工作标题}/article.md`；`article-body.template.html` 和 `preview.html` 交给模板脚本自动生成
 
 **4c-1. 选择排版方向**：
@@ -261,7 +278,7 @@ WebSearch: "{选题关键词} 数据 报告 2025 2026"
 - 每次 render / publish 前，必须自动运行以下脚本并把结果写入 `{article_dir}/generated/`：
   - `python3 {skill_dir}/scripts/humanness_score.py {article_dir}/article.md --json` → `humanness-report.json`
   - `python3 {skill_dir}/scripts/diagnose.py --json` → `diagnose-report.json`
-  - `powershell -ExecutionPolicy Bypass -File {skill_dir}/skill2 paibanyouhua/scripts/project-doctor.ps1 -ArticleDir "{article_dir}"` → `article-doctor-report.json`
+  - `python3 {skill_dir}/toolkit/cli.py check --article-dir "{article_dir}"` 会串联 Python article-doctor fallback（Windows 可继续由 wrapper 调用 PowerShell doctor）→ `article-doctor-report.json`
   - `python3 {skill_dir}/scripts/seo_keywords.py --json "{title}"` → `seo-report.json`
   - `python3 {skill_dir}/skill2 paibanyouhua/scripts/run-quality-gates.py --article-dir "{article_dir}" --strict` → `quality-gates.json`
 - 上述脚本不是可选项；以后凡是走这个 skill 的默认主链，都必须执行并落报告。
@@ -358,25 +375,25 @@ WebSearch: "{选题关键词} 数据 报告 2025 2026"
 Converter 自动处理：CJK 加空格、加粗标点外移、列表转 section、外链转脚注、暗黑模式、容器语法。
 - 预览和发布都基于 `article.md` 中已经插入好的图位执行，因此占位图和正式图都必须使用正文中的同一路径。
 - 草稿箱发布默认使用 `draft-metadata.json` 里的 `cover_image`；未显式指定时默认取 `assets/cover-wide.jpg`，配套方封面保存在 `assets/cover-square.jpg`。
-- `scripts/render_wechat_article.ps1` 会自动补跑 `quality-gates`；`scripts/publish_wechat_article.ps1` 会以零容忍严格模式再次执行，出现任何 `fail`、`warn` 或 `skip` 都直接中止发布。
-- 发布器直接走 Python 微信 API，不依赖 `md2wechat.exe`；需要显式配置时给 `scripts/publish_wechat_article.ps1` 传 `-Config "<config.yaml 路径>"`。
-- 发布前可用 `-DryRun` 验证入口、配置解析、渲染、质量门禁和预检，不上传素材、不创建或更新草稿。
+- `scripts/render_wechat_article.ps1` 会自动补跑 `quality-gates` 并刷新报告；`scripts/check_wechat_article.ps1` 和 `scripts/publish_wechat_article.ps1` 使用零容忍严格模式，出现任何 `fail`、`warn` 或 `skip` 都直接中止验证/发布。
+- 发布器直接走 Python 微信 API，不依赖 `md2wechat.exe`；需要显式配置时给 `toolkit/cli.py publish-draft` 传 `--config "<config.yaml 路径>"`。
+- 发布前可用 `--dry-run` 验证入口、配置解析、渲染、质量门禁和预检，不上传素材、不创建或更新草稿。
 - 跨平台入口保留 PowerShell wrapper，但 Python 与路径解析按平台分支处理：macOS/Linux 优先 `.venv/bin/python`，Windows 优先 `.venv\Scripts\python.exe`；不要在脚本里硬编码混用 `/` 和 `\`。
 - 发布前再做一次排版验收：开头 4 段内是否已经亮出冲突/判断；全文是否至少有 2 种非纯正文模块；是否存在连续 3 个大段纯正文；图位和图例是否都已经补齐；`layout_diversity` 是否没有重复最近 2 篇的主题/版式/模块序列。任意一项不满足都算 warning，必须修复到 0。
 - 如果用户强调“排版别太单调”或当前成稿明显偏平，先额外生成 `{article_dir}/theme-gallery.html` 对比不同主题渲染效果，再决定最终 `--theme`
 
 ```bash
 # 本地渲染 / 预览
-powershell -ExecutionPolicy Bypass -File {skill_dir}/scripts/render_wechat_article.ps1 -ArticleDir "{article_dir}"
+python3 {skill_dir}/toolkit/cli.py render --article-dir "{article_dir}"
 
 # 单独查看质量门禁报告
-powershell -ExecutionPolicy Bypass -File {skill_dir}/scripts/check_wechat_article.ps1 -ArticleDir "{article_dir}"
+python3 {skill_dir}/toolkit/cli.py check --article-dir "{article_dir}"
 
 # 发布到公众号草稿箱
-powershell -ExecutionPolicy Bypass -File {skill_dir}/scripts/publish_wechat_article.ps1 -ArticleDir "{article_dir}"
+python3 {skill_dir}/toolkit/cli.py publish-draft --article-dir "{article_dir}"
 
 # 指定配置并只做干跑验证
-powershell -ExecutionPolicy Bypass -File {skill_dir}/scripts/publish_wechat_article.ps1 -ArticleDir "{article_dir}" -Config "{config_path}" -DryRun
+python3 {skill_dir}/toolkit/cli.py publish-draft --article-dir "{article_dir}" --config "{config_path}" --dry-run
 ```
 
 ---

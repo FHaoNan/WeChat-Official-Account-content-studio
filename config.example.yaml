@@ -26,5 +26,15 @@ image:
   # model: "doubao-seedream-5-0-260128"
   # base_url: "https://ark.cn-beijing.volces.com/api/v3"
 
+# LLM 选题复评 / rerank（可选；默认关闭）
+# 不要把真实 key 写进仓库，推荐使用环境变量。
+llm:
+  provider: "openai_compatible"
+  base_url: "https://api.openai.com/v1"
+  model: "gpt-4o-mini"
+  api_key_env: "OPENAI_API_KEY"
+  timeout_seconds: 60
+  temperature: 0.2
+
 # 默认排版主题
 theme: "professional-clean"

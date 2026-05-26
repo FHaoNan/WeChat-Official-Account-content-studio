@@ -81,6 +81,67 @@ def resolve_powershell() -> str | None:
     return shutil.which("pwsh") or shutil.which("powershell")
 
 
+def article_relative_path(article_dir: Path, ref: str) -> Path:
+    if "\x00" in ref:
+        raise ValueError("path contains NUL byte")
+    normalized = ref.replace("\\", "/").strip()
+    pure = PurePosixPath(normalized)
+    if pure.is_absolute() or re.match(r"^[A-Za-z]:", normalized) or ".." in pure.parts:
+        raise ValueError(f"path escapes article directory: {ref}")
+    parts = PurePosixPath(normalized.lstrip("./")).parts
+    candidate = article_dir.joinpath(*parts).resolve()
+    root = article_dir.resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"path escapes article directory: {ref}") from exc
+    return candidate
+
+
+def run_python_article_doctor(article_dir: Path, article_markdown: str, html: str) -> dict:
+    """PowerShell-free fallback for article-doctor report.
+
+    The original project-doctor.ps1 remains available on Windows, but macOS/Linux
+    agents need a native Python report so the main workflow does not depend on pwsh.
+    This fallback focuses on the same publish-critical checks: source files, image
+    references, unresolved placeholders, comments, and mojibake-like artifacts.
+    """
+    errors: list[str] = []
+    warnings: list[str] = []
+    if not article_markdown.strip():
+        errors.append("article.md is empty")
+    if not html.strip():
+        errors.append("article-body.template.html is empty")
+    if "<!--" in html:
+        errors.append("HTML comments detected in article-body.template.html")
+    for match in re.finditer(r"\{\{([^}]+)\}\}", html):
+        token = match.group(1).strip()
+        if not token.startswith("IMAGE:"):
+            errors.append(f"Unknown unresolved placeholder: {{{{{token}}}}}")
+    for image_ref in re.findall(r"!\[[^\]]*\]\(([^)]+)\)", article_markdown):
+        if image_ref.startswith(("http://", "https://")):
+            continue
+        normalized = normalize_image_src(image_ref)
+        try:
+            image_path = article_relative_path(article_dir, normalized)
+        except ValueError as exc:
+            errors.append(f"Invalid image asset path: {normalized} ({exc})")
+            continue
+        if not image_path.exists():
+            errors.append(f"Missing image asset: {normalized}")
+    if "�" in html or "�" in article_markdown:
+        errors.append("Replacement character detected")
+    return {
+        "engine": "python-fallback",
+        "articles": [{
+            "article_dir": str(article_dir),
+            "errors": errors,
+            "warnings": warnings,
+        }],
+        "summary": {"errors": len(errors), "warnings": len(warnings)},
+    }
+
+
 def make_check(name: str, status: str, detail: str, *, data: object | None = None) -> dict:
     check = {"name": name, "status": status, "detail": detail}
     if data is not None:
@@ -202,11 +263,18 @@ def main() -> int:
         add_check(checks, "image_count", image_count_status, f"正文图片数={len(local_images)} (need 1-10)", data=local_images)
 
         missing_images = []
+        invalid_images = []
         for ref in local_images:
-            candidate = article_dir / ref.replace("/", "\\")
+            try:
+                candidate = article_relative_path(article_dir, ref)
+            except ValueError as exc:
+                invalid_images.append(f"{ref} ({exc})")
+                continue
             if not candidate.exists():
                 missing_images.append(ref)
-        if missing_images:
+        if invalid_images:
+            add_check(checks, "image_assets", "fail", f"非法正文图片路径: {', '.join(invalid_images[:10])}")
+        elif missing_images:
             add_check(checks, "image_assets", "fail", f"缺少正文图片文件: {', '.join(missing_images[:10])}")
         else:
             add_check(checks, "image_assets", "pass", "正文图片文件均存在")
@@ -223,9 +291,15 @@ def main() -> int:
         add_check(checks, "layout_diversity", "fail", "missing article or metadata, cannot check layout diversity")
 
     cover_image = str(metadata.get("cover_image") or "assets/cover-wide.jpg").strip() or "assets/cover-wide.jpg"
-    cover_path = article_dir / cover_image.replace("/", "\\")
+    try:
+        cover_path = article_relative_path(article_dir, cover_image)
+        cover_detail = f"cover image: {cover_path}"
+        cover_exists = cover_path.exists()
+    except ValueError as exc:
+        cover_detail = f"invalid cover image path: {cover_image} ({exc})"
+        cover_exists = False
     cover_square_path = article_dir / "assets" / "cover-square.jpg"
-    add_check(checks, "cover_image", "pass" if cover_path.exists() else "fail", f"cover image: {cover_path}")
+    add_check(checks, "cover_image", "pass" if cover_exists else "fail", cover_detail)
     add_check(
         checks,
         "cover_square_image",
@@ -264,8 +338,8 @@ def main() -> int:
 
     powershell = resolve_powershell()
     if powershell is None:
-        doctor_result = None
-        doctor_error = "pwsh/powershell executable not found"
+        doctor_result = run_python_article_doctor(article_dir, article_markdown, html)
+        doctor_error = None
     else:
         doctor_result, doctor_error = run_json_command([
             powershell,

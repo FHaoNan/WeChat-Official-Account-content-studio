@@ -9,7 +9,10 @@ Usage:
 """
 
 import argparse
+import json
 import os
+import re
+import subprocess
 import sys
 import webbrowser
 from pathlib import Path
@@ -47,6 +50,167 @@ def load_config() -> dict:
                 return yaml.safe_load(f) or {}
     return {}
 
+
+
+def write_utf8(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def safe_folder_name(value: str) -> str:
+    name = re.sub(r"[\\/:*?\"<>|\x00-\x1f]+", "-", value).strip().strip(".")
+    if not name:
+        raise ValueError("The title becomes an empty folder name after sanitization.")
+    return name
+
+
+def render_template(path: Path, tokens: dict[str, str]) -> str:
+    content = path.read_text(encoding="utf-8")
+    for key, value in tokens.items():
+        content = content.replace(key, value)
+    return content
+
+
+def resolve_article_dir(path_value: str) -> Path:
+    raw = Path(path_value).expanduser()
+    candidates = [raw] if raw.is_absolute() else [SKILL_ROOT / raw, SKILL_ROOT / "output" / raw]
+    for candidate in candidates:
+        if candidate.exists():
+            return candidate.resolve()
+    raise FileNotFoundError(f"Article folder not found. Tried: {', '.join(str(item) for item in candidates)}")
+
+
+def run_python_script(script: Path, args: list[str]) -> int:
+    command = [sys.executable, str(script), *args]
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    paths = [str(SKILL_ROOT / "toolkit"), str(SKILL_ROOT / "scripts")]
+    if existing_pythonpath:
+        paths.append(existing_pythonpath)
+    env["PYTHONPATH"] = os.pathsep.join(paths)
+    completed = subprocess.run(
+        command,
+        cwd=str(SKILL_ROOT),
+        env=env,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    return int(completed.returncode)
+
+
+def run_python_script_capture(script: Path, args: list[str]) -> tuple[int, str, str]:
+    command = [sys.executable, str(script), *args]
+    env = os.environ.copy()
+    existing_pythonpath = env.get("PYTHONPATH", "")
+    paths = [str(SKILL_ROOT / "toolkit"), str(SKILL_ROOT / "scripts")]
+    if existing_pythonpath:
+        paths.append(existing_pythonpath)
+    env["PYTHONPATH"] = os.pathsep.join(paths)
+    completed = subprocess.run(
+        command,
+        cwd=str(SKILL_ROOT),
+        env=env,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    return int(completed.returncode), completed.stdout, completed.stderr
+
+
+def cmd_new(args) -> None:
+    """Create a standard managed article directory without PowerShell."""
+    title = args.title.strip()
+    if not title:
+        raise ValueError("--title is required")
+    author = args.author or ""
+    source_url = args.source_url or ""
+    folder_name = safe_folder_name(title)
+    output_root = Path(os.environ.get("WEWRITE_OUTPUT_ROOT", str(SKILL_ROOT / "output"))).expanduser()
+    if not output_root.is_absolute():
+        output_root = (SKILL_ROOT / output_root).resolve()
+    article_dir = output_root / folder_name
+    if article_dir.exists() and not args.force:
+        raise FileExistsError(f"Article folder already exists: {article_dir}")
+
+    assets_dir = article_dir / "assets"
+    generated_dir = article_dir / "generated"
+    assets_dir.mkdir(parents=True, exist_ok=True)
+    generated_dir.mkdir(parents=True, exist_ok=True)
+
+    template_root = SKILL_ROOT / "skill2 paibanyouhua" / "templates"
+    tokens = {"__TITLE__": title, "__AUTHOR__": author, "__SOURCE_URL__": source_url}
+    template_map = {
+        template_root / "article.md.template": article_dir / "article.md",
+        template_root / "draft-metadata.json.template": article_dir / "draft-metadata.json",
+        template_root / "article-body.template.html.template": article_dir / "article-body.template.html",
+        template_root / "image-prompts.md.template": generated_dir / "image-prompts.md",
+    }
+    for template, output in template_map.items():
+        if not template.exists():
+            raise FileNotFoundError(f"Template not found: {template}")
+        write_utf8(output, render_template(template, tokens))
+
+    print(json.dumps({
+        "article_dir": str(article_dir.resolve()),
+        "folder_name": folder_name,
+        "article_file": str((article_dir / "article.md").resolve()),
+        "html_template": str((article_dir / "article-body.template.html").resolve()),
+        "metadata_file": str((article_dir / "draft-metadata.json").resolve()),
+        "image_prompt_file": str((generated_dir / "image-prompts.md").resolve()),
+    }, ensure_ascii=False, indent=2))
+
+
+def cmd_render(args) -> int:
+    article_dir = resolve_article_dir(args.article_dir)
+    render_script = SKILL_ROOT / "skill2 paibanyouhua" / "scripts" / "render-article.py"
+    render_args = ["--article-dir", str(article_dir)]
+    if args.theme:
+        render_args.extend(["--theme", args.theme])
+    render_code = run_python_script(render_script, render_args)
+    if render_code != 0:
+        return render_code
+
+    # Keep the old render wrapper behavior: rendering also refreshes the quality
+    # reports under generated/. By default this is report-only so `render` remains
+    # usable while config.yaml/history.yaml are intentionally absent; `check` and
+    # `publish-draft` remain the strict blocking gates.
+    check_script = SKILL_ROOT / "skill2 paibanyouhua" / "scripts" / "run-quality-gates.py"
+    check_code, check_stdout, check_stderr = run_python_script_capture(check_script, ["--article-dir", str(article_dir)])
+    if check_stdout:
+        print(check_stdout, end="", file=sys.stderr)
+    if check_stderr:
+        print(check_stderr, end="", file=sys.stderr)
+    if check_code != 0 and not args.strict_check:
+        print(
+            "render completed; quality gates produced non-pass items. "
+            "Run `python3 toolkit/cli.py check --article-dir ...` for strict validation.",
+            file=sys.stderr,
+        )
+        return 0
+    return check_code
+
+
+def cmd_check(args) -> int:
+    article_dir = resolve_article_dir(args.article_dir)
+    script = SKILL_ROOT / "skill2 paibanyouhua" / "scripts" / "run-quality-gates.py"
+    return run_python_script(script, ["--article-dir", str(article_dir), "--strict"])
+
+
+def cmd_publish_draft(args) -> int:
+    article_dir = resolve_article_dir(args.article_dir)
+    script = SKILL_ROOT / "skill2 paibanyouhua" / "scripts" / "publish-article.py"
+    script_args = ["--article-dir", str(article_dir), "--json"]
+    if args.allow_native_lists:
+        script_args.append("--allow-native-lists")
+    if args.config:
+        script_args.extend(["--config", args.config])
+    if args.dry_run:
+        script_args.append("--dry-run")
+    return run_python_script(script, script_args)
 
 def cmd_preview(args):
     """Generate HTML preview and open in browser."""
@@ -393,6 +557,27 @@ def main():
     )
     sub = parser.add_subparsers(dest="command", required=True)
 
+    # managed article workflow (PowerShell-free primary path)
+    p_new = sub.add_parser("new", help="Create standard article directory")
+    p_new.add_argument("--title", required=True, help="Article title / output folder name")
+    p_new.add_argument("--author", default="", help="Article author")
+    p_new.add_argument("--source-url", default="", help="Original content source URL")
+    p_new.add_argument("--force", action="store_true", help="Overwrite existing article folder files")
+
+    p_render = sub.add_parser("render", help="Render managed article dir to preview HTML")
+    p_render.add_argument("--article-dir", required=True, help="Article directory or name under output/")
+    p_render.add_argument("--theme", default="", help="Override theme name")
+    p_render.add_argument("--strict-check", action="store_true", help="Return non-zero if refreshed quality gates have non-pass items")
+
+    p_check = sub.add_parser("check", help="Run managed article quality gates")
+    p_check.add_argument("--article-dir", required=True, help="Article directory or name under output/")
+
+    p_publish_draft = sub.add_parser("publish-draft", help="Publish managed article as WeChat draft")
+    p_publish_draft.add_argument("--article-dir", required=True, help="Article directory or name under output/")
+    p_publish_draft.add_argument("--config", default="", help="Publish config.yaml path")
+    p_publish_draft.add_argument("--dry-run", action="store_true", help="Validate only; do not upload or create draft")
+    p_publish_draft.add_argument("--allow-native-lists", action="store_true", help="Allow native ul/ol/li in final HTML")
+
     # preview
     p_preview = sub.add_parser("preview", help="Generate HTML and open in browser")
     p_preview.add_argument("input", help="Markdown file path")
@@ -430,7 +615,15 @@ def main():
     args = parser.parse_args()
 
     try:
-        if args.command == "preview":
+        if args.command == "new":
+            cmd_new(args)
+        elif args.command == "render":
+            sys.exit(cmd_render(args))
+        elif args.command == "check":
+            sys.exit(cmd_check(args))
+        elif args.command == "publish-draft":
+            sys.exit(cmd_publish_draft(args))
+        elif args.command == "preview":
             cmd_preview(args)
         elif args.command == "publish":
             cmd_publish(args)
