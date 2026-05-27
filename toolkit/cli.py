@@ -360,6 +360,8 @@ def cmd_publish_draft(args) -> int:
         script_args.extend(["--config", args.config])
     if args.dry_run:
         script_args.append("--dry-run")
+    if getattr(args, "fake_wechat", False):
+        script_args.append("--fake-wechat")
     return run_python_script(script, script_args)
 
 
@@ -1088,6 +1090,7 @@ def main():
     p_publish_draft.add_argument("--config", default="", help="Publish config.yaml path")
     p_publish_draft.add_argument("--dry-run", action="store_true", help="Validate only; do not upload or create draft")
     p_publish_draft.add_argument("--allow-native-lists", action="store_true", help="Allow native ul/ol/li in final HTML")
+    p_publish_draft.add_argument("--fake-wechat", action="store_true", help="Use deterministic fake WeChat API; intended for integration tests only")
 
     p_publish_ready = sub.add_parser("publish-ready", help="Strong pre-publish gate for managed articles")
     p_publish_ready.add_argument("--article-dir", required=True, help="Article directory or name under output/")

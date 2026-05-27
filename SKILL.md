@@ -161,6 +161,8 @@ python3 {skill_dir}/scripts/seo_keywords.py --json {关键词}
 
 发布前必须先运行 P9 强门禁：`python3 {skill_dir}/toolkit/cli.py publish-ready --article-dir {article_dir} --config {config_yaml}`。默认会检查 `preview.html`、封面图、metadata、`source_credibility`、`evidence_coverage`、quality gates 是否有 fail，并执行 `publish-draft --dry-run`；只有全部通过才返回 0。离线测试或只审本地报告时可显式加 `--skip-publish-dry-run`，但这不等于真正 publish-ready。
 
+P10 真实草稿发布入口：`python3 {skill_dir}/toolkit/cli.py publish-draft --article-dir {article_dir} --config {config_yaml}`。该命令会重新 render，按 P9 策略阻塞 quality fail（允许 warn），做发布 preflight，上传封面和正文图片，创建或更新公众号草稿；如果 `draft-metadata.json` 已有 `media_id`，走更新，否则创建新草稿。测试/CI 可用 `--fake-wechat` 走确定性假 WeChat API，不会触网；真实发布不要加该参数。
+
 如果 topic 只有 `overseas_evidence_plan` / `overseas_evidence.directions`，先运行 P4 补证：`python3 {skill_dir}/scripts/research_sources.py --topic-file {topic_json} --topic-output {topic_with_sources_json} --output {sources_json} --json`。该脚本会把补证方向转成搜索 query，抓取候选 URL，复用 `source_gate.py` 分类，要求 primary + community + media_or_secondary 三类齐全；找不齐默认返回非 0。测试或离线运行可用 `--search-fixture fixture.json`；探索性运行才使用 `--allow-incomplete`。
 
 选题必须遵循 `references/topic-selection.md` 的原则：**国内热点发现，海外信息补证**。国内热搜只解决选题入口，后续事实素材、技术判断、模型能力、产品细节和产业链证据仍必须回到 Step 3b 的 `source_policy` 检索与交叉验证。

@@ -7,6 +7,7 @@ import os
 import re
 import subprocess
 import sys
+from types import SimpleNamespace
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -85,6 +86,51 @@ def run_step(command: list[str], *, cwd: Path = REPO_ROOT, extra_env: dict[str, 
     if completed.returncode != 0:
         raw = (completed.stdout or "") + (completed.stderr or "")
         raise RuntimeError(f"command failed ({completed.returncode}): {' '.join(command)}\n{raw.strip()}")
+
+
+def _build_step_env(extra_env: dict[str, str] | None = None) -> dict[str, str]:
+    env = os.environ.copy()
+    local_site_packages = existing_local_site_packages()
+    if local_site_packages and sys.version_info >= (3, 10):
+        existing_pythonpath = env.get("PYTHONPATH", "")
+        paths = [str(path) for path in local_site_packages]
+        if existing_pythonpath:
+            paths.append(existing_pythonpath)
+        env["PYTHONPATH"] = os.pathsep.join(paths)
+    if extra_env:
+        env.update(extra_env)
+    return env
+
+
+def run_quality_gate_for_publish(command: list[str], *, article_dir: Path, extra_env: dict[str, str]) -> None:
+    """Run quality gates for publishing: block fail checks, allow warnings."""
+    completed = subprocess.run(
+        command,
+        cwd=str(REPO_ROOT),
+        env=_build_step_env(extra_env),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    report_path = article_dir / "generated" / "quality-gates.json"
+    if not report_path.exists():
+        raw = (completed.stdout or "") + (completed.stderr or "")
+        raise RuntimeError(f"quality gate did not write report ({completed.returncode})\n{raw.strip()}")
+    try:
+        report = load_json(report_path)
+    except Exception as exc:
+        raise RuntimeError(f"quality-gates.json invalid: {exc}") from exc
+    summary = report.get("summary", {}) if isinstance(report.get("summary"), dict) else {}
+    fail_count = int(summary.get("fail", 0) or 0)
+    if fail_count > 0:
+        failed = [
+            str(item.get("name"))
+            for item in report.get("checks", [])
+            if isinstance(item, dict) and item.get("status") == "fail"
+        ]
+        raise RuntimeError(f"quality gates failed: {', '.join(failed) or fail_count}")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -240,6 +286,7 @@ def publish_article(
     allow_native_lists: bool,
     config_path: str = "",
     dry_run: bool = False,
+    fake_wechat: bool = False,
 ) -> dict[str, Any]:
     render_script = WORKFLOW_ROOT / "scripts" / "render-article.py"
     quality_script = WORKFLOW_ROOT / "scripts" / "run-quality-gates.py"
@@ -249,7 +296,7 @@ def publish_article(
         "WEWRITE_REQUIRE_IMAGE_CONFIG": "0",
     }
     run_step([sys.executable, str(render_script), "--article-dir", str(article_dir)], extra_env=step_env)
-    run_step([sys.executable, str(quality_script), "--article-dir", str(article_dir), "--strict"], extra_env=step_env)
+    run_quality_gate_for_publish([sys.executable, str(quality_script), "--article-dir", str(article_dir)], article_dir=article_dir, extra_env=step_env)
 
     generated_dir = article_dir / "generated"
     meta_path = article_dir / "draft-metadata.json"
@@ -305,10 +352,21 @@ def publish_article(
             "cover_image": cover_image,
             "cover_path": str(cover_path),
             "planned_images": planned_images,
+            "fake_wechat": bool(fake_wechat),
         }
 
-    token = get_access_token(appid, secret)
-    cover_media_id = upload_thumb(token, str(cover_path))
+    if fake_wechat:
+        token = "fake-access-token"
+        cover_media_id = "fake-thumb-media-id"
+        upload_image_func = lambda _token, image_path: f"https://fake.wechat.local/uploadimg/{Path(image_path).name}"
+        create_draft_func = lambda access_token, body: SimpleNamespace(media_id="fake-draft-media-id")
+        update_draft_func = lambda access_token, media_id, article, index=0: SimpleNamespace(media_id=media_id)
+    else:
+        token = get_access_token(appid, secret)
+        cover_media_id = upload_thumb(token, str(cover_path))
+        upload_image_func = upload_image
+        create_draft_func = create_draft_from_payload
+        update_draft_func = update_draft
 
     image_cache: dict[str, str] = {}
 
@@ -316,7 +374,7 @@ def publish_article(
         relative_image_path = normalize_image_src(match.group(1).strip())
         if relative_image_path not in image_cache:
             image_path = resolve_article_file(article_dir, relative_image_path)
-            image_cache[relative_image_path] = upload_image(token, str(image_path))
+            image_cache[relative_image_path] = upload_image_func(token, str(image_path))
         return image_cache[relative_image_path]
 
     html = re.sub(r"\{\{IMAGE:([^}]+)\}\}", replace_image, html)
@@ -340,10 +398,10 @@ def publish_article(
     write_utf8(draft_json_path, json.dumps(draft, ensure_ascii=False, indent=2) + "\n")
 
     if existing_media_id:
-        result = update_draft(access_token=token, media_id=existing_media_id, article=article, index=0)
+        result = update_draft_func(access_token=token, media_id=existing_media_id, article=article, index=0)
         action = "updated"
     else:
-        result = create_draft_from_payload(access_token=token, body=draft)
+        result = create_draft_func(access_token=token, body=draft)
         action = "created"
 
     metadata["media_id"] = result.media_id
@@ -357,6 +415,7 @@ def publish_article(
         "uploaded_images": sorted(image_cache),
         "cover_image": cover_image,
         "draft_json": str(draft_json_path),
+        "fake_wechat": bool(fake_wechat),
     }
     write_utf8(result_path, json.dumps(publish_result, ensure_ascii=False, indent=2) + "\n")
     return publish_result
@@ -368,6 +427,7 @@ def main() -> int:
     parser.add_argument("--allow-native-lists", action="store_true")
     parser.add_argument("--config", default="")
     parser.add_argument("--dry-run", action="store_true", help="Validate render, gates, preflight, and config without touching WeChat.")
+    parser.add_argument("--fake-wechat", action="store_true", help="Use deterministic fake WeChat uploads/draft API for tests; never call network.")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args()
 
@@ -378,6 +438,7 @@ def main() -> int:
             allow_native_lists=bool(args.allow_native_lists),
             config_path=args.config,
             dry_run=bool(args.dry_run),
+            fake_wechat=bool(args.fake_wechat),
         )
         print(json.dumps(result, ensure_ascii=False, indent=2))
         return 0
