@@ -167,13 +167,13 @@ def build_article(topic: dict[str, Any], claims: list[dict[str, Any]]) -> str:
 
     ## 先说结论
 
-    这件事不只是一个 AI 产品热点。它真正值得拆的是：当产品从一次问答走向多步 Agent，成本就不再只是“输入几个字、输出几段话”，而会变成工具调用、上下文携带、失败重试和可靠性之间的系统账。
+    这件事不只是一个 AI 产品热点。它真正值得拆的是：当产品从一次问答走向多步 Agent，成本就不再只是“输入几个字、输出几段话”，而会变成工具调用、上下文携带、失败重试和可靠性之间的系统账 [{first_claim}]。
 
-    国内热点入口是「{hotspot_source} / {hotspot_title}」。但这篇文章不按热搜复述，而是用海外来源先把事实边界钉住，再回到一个工程问题：{engineering_question}
+    国内热点入口是「{hotspot_source} / {hotspot_title}」。但这篇文章不按热搜复述，而是用海外来源先把事实边界钉住，再回到一个工程问题：{engineering_question} [{first_claim}]
 
     ## 为什么它会烧 token
 
-    {angle}
+    {angle} [{first_claim}]
 
     一个多步 Agent 往往不是只调用一次模型。它需要判断任务、选择工具、读工具返回、再决定下一步；每一步都可能把前面的上下文继续带进去。官方文档层面的事实说明，工具调用会把外部函数和 API 纳入模型应用流程 [{first_claim}]。这意味着，产品体验里看起来像“一次完成”的动作，工程上可能已经拆成了多轮模型和工具交互。
 
@@ -193,7 +193,7 @@ def build_article(topic: dict[str, Any], claims: list[dict[str, Any]]) -> str:
 
     ## 结尾判断
 
-    所以，这个热点可以先记住一句话：Agent 的价值来自“多做几步”，成本也恰好烧在“多做几步”。真正值得关注的不是它能不能完成一个 demo，而是当任务变长、工具变多、上下文变厚之后，系统还能不能用可承受的 token 预算稳定跑完。
+    所以，这个热点可以先记住一句话：Agent 的价值来自“多做几步”，成本也恰好烧在“多做几步”。真正值得关注的不是它能不能完成一个 demo，而是当任务变长、工具变多、上下文变厚之后，系统还能不能用可承受的 token 预算稳定跑完 [{first_claim}][{second_claim}][{third_claim}]。
 
     ## 来源
 

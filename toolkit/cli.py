@@ -416,6 +416,7 @@ def cmd_draft_from_topic(args) -> int:
         "sources_json": str(generated_dir / "sources.json"),
         "topic_json": str(generated_dir / "topic.json"),
         "evidence_ledger": str(generated_dir / "evidence-ledger.json"),
+        "evidence_report": str(generated_dir / "evidence-report.json"),
         "source_report": str(generated_dir / "source-report.json"),
         "quality_gates": str(generated_dir / "quality-gates.json"),
     }

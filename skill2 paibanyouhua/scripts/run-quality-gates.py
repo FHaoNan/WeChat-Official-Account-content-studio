@@ -185,6 +185,7 @@ def main() -> int:
     doctor_path = generated_dir / "article-doctor-report.json"
     seo_path = generated_dir / "seo-report.json"
     source_path = generated_dir / "source-report.json"
+    evidence_path = generated_dir / "evidence-report.json"
 
     checks: list[dict] = []
     artifacts: dict[str, object] = {
@@ -192,6 +193,7 @@ def main() -> int:
         "article_doctor_report": str(doctor_path),
         "seo_report": str(seo_path),
         "source_report": str(source_path),
+        "evidence_report": str(evidence_path),
     }
 
     article_path = article_dir / "article.md"
@@ -403,6 +405,25 @@ def main() -> int:
         missing_categories = source_summary.get("missing_categories", []) or []
         detail = "source evidence mix ok" if source_passed else f"missing source categories: {', '.join(missing_categories)}"
         add_check(checks, "source_credibility", "pass" if source_passed else "fail", detail, data=source_summary)
+
+
+    evidence_result, evidence_error = run_json_command([
+        sys.executable,
+        str(REPO_ROOT / "scripts" / "evidence_gate.py"),
+        "--article-dir",
+        str(article_dir),
+        "--output",
+        str(evidence_path),
+        "--json",
+    ])
+    if evidence_result is None:
+        add_check(checks, "evidence_coverage", "fail", f"evidence_gate.py failed: {evidence_error}")
+    else:
+        evidence_summary = evidence_result.get("summary", {}) if isinstance(evidence_result, dict) else {}
+        evidence_passed = bool(evidence_summary.get("passed"))
+        unsupported = int(evidence_summary.get("unsupported", 0) or 0)
+        detail = "key claims have evidence citations" if evidence_passed else f"unsupported claim sentences: {unsupported}"
+        add_check(checks, "evidence_coverage", "pass" if evidence_passed else "fail", detail, data=evidence_summary)
 
     report = {
         "article_dir": str(article_dir),
