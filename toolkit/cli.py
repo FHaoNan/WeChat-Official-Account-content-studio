@@ -504,7 +504,7 @@ def cmd_auto_draft(args) -> int:
         author=args.author or "烧 Token 的人",
         force=args.force,
         theme=args.theme,
-        strict_check=args.strict_check,
+        strict_check=False if getattr(args, "revise_once", False) else args.strict_check,
     )
     stdout_buffer = io.StringIO()
     with contextlib.redirect_stdout(stdout_buffer):
@@ -515,6 +515,48 @@ def cmd_auto_draft(args) -> int:
             print(draft_stdout, file=sys.stderr, end="")
         return draft_code
     draft_payload = json.loads(draft_stdout)
+    revision_payload = None
+    final_gate_code = draft_payload.get("quality_gates_exit_code")
+    article_dir = Path(draft_payload["article_dir"])
+
+    if getattr(args, "revise_once", False):
+        revise_script = SKILL_ROOT / "scripts" / "revise_draft.py"
+        revise_code, revise_stdout, revise_stderr = run_python_script_capture(
+            revise_script,
+            ["--article-dir", str(article_dir), "--json"],
+        )
+        if revise_stderr:
+            print(revise_stderr, file=sys.stderr, end="")
+        if revise_code != 0:
+            if revise_stdout:
+                print(revise_stdout, file=sys.stderr, end="")
+            return revise_code
+        revision_payload = json.loads(revise_stdout)
+
+        render_script = SKILL_ROOT / "skill2 paibanyouhua" / "scripts" / "render-article.py"
+        render_args = ["--article-dir", str(article_dir)]
+        if args.theme:
+            render_args.extend(["--theme", args.theme])
+        render_code, render_stdout, render_stderr = run_python_script_capture(render_script, render_args)
+        if render_code != 0:
+            if render_stdout:
+                print(render_stdout, file=sys.stderr, end="")
+            if render_stderr:
+                print(render_stderr, file=sys.stderr, end="")
+            return render_code
+
+        gate_script = SKILL_ROOT / "skill2 paibanyouhua" / "scripts" / "run-quality-gates.py"
+        final_gate_code, gate_stdout, gate_stderr = run_python_script_capture(
+            gate_script,
+            ["--article-dir", str(article_dir)] + (["--strict"] if args.strict_check else []),
+        )
+        if gate_stderr:
+            print(gate_stderr, file=sys.stderr, end="")
+        if final_gate_code != 0 and args.strict_check:
+            if gate_stdout:
+                print(gate_stdout, file=sys.stderr, end="")
+            return final_gate_code
+
     artifacts = {
         "selected_topics": str(selected_topics_path),
         "topic_with_sources": str(topic_with_sources_path),
@@ -523,6 +565,8 @@ def cmd_auto_draft(args) -> int:
         "article_dir": draft_payload["article_dir"],
         **draft_payload.get("artifacts", {}),
     }
+    if revision_payload:
+        artifacts["revision_report"] = revision_payload.get("artifacts", {}).get("revision_report", str(article_dir / "generated" / "revision-report.json"))
     result = {
         "success": True,
         "article_dir": draft_payload["article_dir"],
@@ -530,10 +574,12 @@ def cmd_auto_draft(args) -> int:
         "pipeline": {
             "selected_topics": {"count": int(selected_topics.get("count", len(selected_topics.get("topics", [])))), "llm_rerank": selected_topics.get("llm_rerank", {})},
             "research_sources": {"summary": research_report.get("summary", {})},
-            "draft": {"quality_gates_exit_code": draft_payload.get("quality_gates_exit_code")},
+            "draft": {"quality_gates_exit_code": final_gate_code},
         },
         "artifacts": artifacts,
     }
+    if revision_payload:
+        result["pipeline"]["revision"] = revision_payload.get("revision", {})
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 
@@ -923,6 +969,7 @@ def main():
     p_auto_draft.add_argument("--theme", default="", help="Render theme override")
     p_auto_draft.add_argument("--strict-check", action="store_true", help="Return non-zero if final quality gates fail")
     p_auto_draft.add_argument("--force", action="store_true", help="Overwrite existing article folder")
+    p_auto_draft.add_argument("--revise-once", action="store_true", help="Run revise_draft.py once, then re-render and rerun quality gates")
     p_auto_draft.add_argument("--search-fixture", default="", help="Fixture JSON for deterministic/offline source research")
     p_auto_draft.add_argument("--no-network", action="store_true", help="Do not call web search during source research")
     p_auto_draft.add_argument("--allow-incomplete-sources", action="store_true", help="Continue even if research source mix is incomplete")
