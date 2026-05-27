@@ -211,6 +211,145 @@ def cmd_check(args) -> int:
     return run_python_script(script, ["--article-dir", str(article_dir), "--strict"])
 
 
+
+def _read_json_file(path: Path) -> dict:
+    data = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError(f"{path} must contain a JSON object")
+    return data
+
+
+def _publish_ready_check(name: str, ok: bool, detail: str, data: object | None = None) -> dict:
+    item = {"name": name, "status": "pass" if ok else "fail", "detail": detail}
+    if data is not None:
+        item["data"] = data
+    return item
+
+
+def cmd_publish_ready(args) -> int:
+    article_dir = resolve_article_dir(args.article_dir)
+    generated_dir = article_dir / "generated"
+    checks: list[dict] = []
+    artifacts = {
+        "article_md": str(article_dir / "article.md"),
+        "preview_html": str(article_dir / "preview.html"),
+        "draft_metadata": str(article_dir / "draft-metadata.json"),
+        "quality_gates": str(generated_dir / "quality-gates.json"),
+        "source_report": str(generated_dir / "source-report.json"),
+        "evidence_report": str(generated_dir / "evidence-report.json"),
+        "publish_ready_report": str(generated_dir / "publish-ready-report.json"),
+    }
+
+    required_files = [
+        (article_dir / "article.md", "article_md"),
+        (article_dir / "preview.html", "preview_html"),
+        (article_dir / "article-body.template.html", "html_template"),
+        (article_dir / "draft-metadata.json", "draft_metadata"),
+    ]
+    for path, name in required_files:
+        checks.append(_publish_ready_check(name, path.exists(), f"{name} {'found' if path.exists() else 'missing'}: {path}"))
+
+    metadata: dict = {}
+    metadata_path = article_dir / "draft-metadata.json"
+    if metadata_path.exists():
+        try:
+            metadata = _read_json_file(metadata_path)
+            required_meta = ["title", "author", "digest", "cover_image"]
+            missing_meta = [key for key in required_meta if not str(metadata.get(key) or "").strip()]
+            checks.append(_publish_ready_check("metadata_complete", not missing_meta, "metadata fields ok" if not missing_meta else f"missing metadata fields: {', '.join(missing_meta)}", {"missing": missing_meta}))
+            cover_ref = str(metadata.get("cover_image") or "assets/cover-wide.jpg").strip() or "assets/cover-wide.jpg"
+            cover_path = article_dir / cover_ref.replace("\\", "/").lstrip("./")
+            checks.append(_publish_ready_check("cover_image", cover_path.exists(), f"cover image: {cover_path}"))
+            square_path = article_dir / "assets" / "cover-square.jpg"
+            checks.append(_publish_ready_check("cover_square_image", square_path.exists(), f"square cover image: {square_path}"))
+        except Exception as exc:
+            checks.append(_publish_ready_check("draft_metadata_json", False, f"draft-metadata.json invalid: {exc}"))
+    else:
+        checks.append(_publish_ready_check("metadata_complete", False, "draft-metadata.json missing"))
+
+    quality_path = generated_dir / "quality-gates.json"
+    source_path = generated_dir / "source-report.json"
+    evidence_path = generated_dir / "evidence-report.json"
+    quality: dict = {}
+    source_report: dict = {}
+    evidence_report: dict = {}
+
+    for path, name in [(quality_path, "quality_gates"), (source_path, "source_report"), (evidence_path, "evidence_report")]:
+        checks.append(_publish_ready_check(name, path.exists(), f"{name} {'found' if path.exists() else 'missing'}: {path}"))
+
+    if quality_path.exists():
+        try:
+            quality = _read_json_file(quality_path)
+            q_checks = quality.get("checks", []) if isinstance(quality.get("checks", []), list) else []
+            failed = [item for item in q_checks if item.get("status") == "fail"]
+            checks.append(_publish_ready_check("quality_no_failures", not failed, "quality gates have no fail checks" if not failed else f"quality gate failures: {', '.join(str(item.get('name')) for item in failed)}", {"failed": failed}))
+            if args.zero_warnings:
+                non_pass = [item for item in q_checks if item.get("status") != "pass"]
+                checks.append(_publish_ready_check("quality_zero_warnings", not non_pass, "all quality gates pass" if not non_pass else f"non-pass gates: {', '.join(str(item.get('name')) for item in non_pass)}", {"non_pass": non_pass}))
+        except Exception as exc:
+            checks.append(_publish_ready_check("quality_gates_json", False, f"quality-gates.json invalid: {exc}"))
+
+    if source_path.exists():
+        try:
+            source_report = _read_json_file(source_path)
+            summary = source_report.get("summary", {}) if isinstance(source_report.get("summary"), dict) else {}
+            ok = bool(summary.get("passed"))
+            missing = summary.get("missing_categories", []) or []
+            checks.append(_publish_ready_check("source_credibility", ok, "source evidence mix ok" if ok else f"missing source categories: {', '.join(missing)}", summary))
+        except Exception as exc:
+            checks.append(_publish_ready_check("source_report_json", False, f"source-report.json invalid: {exc}"))
+
+    if evidence_path.exists():
+        try:
+            evidence_report = _read_json_file(evidence_path)
+            summary = evidence_report.get("summary", {}) if isinstance(evidence_report.get("summary"), dict) else {}
+            ok = bool(summary.get("passed"))
+            checks.append(_publish_ready_check("evidence_coverage", ok, "key claims have evidence citations" if ok else f"unsupported claims: {summary.get('unsupported', 0)}", summary))
+        except Exception as exc:
+            checks.append(_publish_ready_check("evidence_report_json", False, f"evidence-report.json invalid: {exc}"))
+
+    publish_dry_run_payload = None
+    if args.skip_publish_dry_run:
+        checks.append({"name": "publish_dry_run", "status": "skip", "detail": "explicitly skipped by --skip-publish-dry-run"})
+    else:
+        script = SKILL_ROOT / "skill2 paibanyouhua" / "scripts" / "publish-article.py"
+        script_args = ["--article-dir", str(article_dir), "--dry-run", "--json"]
+        if args.config:
+            script_args.extend(["--config", args.config])
+        if args.allow_native_lists:
+            script_args.append("--allow-native-lists")
+        code, stdout, stderr = run_python_script_capture(script, script_args)
+        raw = (stdout or "") + (stderr or "")
+        if code == 0:
+            try:
+                publish_dry_run_payload = json.loads(stdout)
+            except Exception:
+                publish_dry_run_payload = {"stdout": stdout.strip()}
+            checks.append({"name": "publish_dry_run", "status": "pass", "detail": "publish-draft dry-run passed", "data": publish_dry_run_payload})
+        else:
+            detail = raw.strip() or f"publish dry-run failed with exit {code}"
+            checks.append({"name": "publish_dry_run", "status": "fail", "detail": detail[:1200]})
+
+    summary = {
+        "pass": sum(1 for item in checks if item["status"] == "pass"),
+        "fail": sum(1 for item in checks if item["status"] == "fail"),
+        "skip": sum(1 for item in checks if item["status"] == "skip"),
+    }
+    success = summary["fail"] == 0
+    result = {
+        "success": success,
+        "article_dir": str(article_dir),
+        "checks": checks,
+        "summary": summary,
+        "artifacts": artifacts,
+    }
+    if publish_dry_run_payload is not None:
+        result["publish_dry_run"] = publish_dry_run_payload
+    generated_dir.mkdir(parents=True, exist_ok=True)
+    (generated_dir / "publish-ready-report.json").write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0 if success else 1
+
 def cmd_publish_draft(args) -> int:
     article_dir = resolve_article_dir(args.article_dir)
     script = SKILL_ROOT / "skill2 paibanyouhua" / "scripts" / "publish-article.py"
@@ -950,6 +1089,13 @@ def main():
     p_publish_draft.add_argument("--dry-run", action="store_true", help="Validate only; do not upload or create draft")
     p_publish_draft.add_argument("--allow-native-lists", action="store_true", help="Allow native ul/ol/li in final HTML")
 
+    p_publish_ready = sub.add_parser("publish-ready", help="Strong pre-publish gate for managed articles")
+    p_publish_ready.add_argument("--article-dir", required=True, help="Article directory or name under output/")
+    p_publish_ready.add_argument("--config", default="", help="Publish config.yaml path for publish-draft --dry-run")
+    p_publish_ready.add_argument("--allow-native-lists", action="store_true", help="Forward to publish-draft dry-run preflight")
+    p_publish_ready.add_argument("--skip-publish-dry-run", action="store_true", help="Only inspect local reports; default requires publish-draft --dry-run")
+    p_publish_ready.add_argument("--zero-warnings", action="store_true", help="Fail on quality gate warn/skip as well as fail")
+
     p_draft_topic = sub.add_parser("draft-from-topic", help="Create article draft from selected topic JSON and run render/source gates")
     p_draft_topic.add_argument("--topic-file", required=True, help="Topic JSON from select_ai_topics.py or curated research payload")
     p_draft_topic.add_argument("--topic-index", type=int, default=None, help="Index inside topics[]; default picks first auto-writeable topic")
@@ -1026,6 +1172,8 @@ def main():
             sys.exit(cmd_check(args))
         elif args.command == "publish-draft":
             sys.exit(cmd_publish_draft(args))
+        elif args.command == "publish-ready":
+            sys.exit(cmd_publish_ready(args))
         elif args.command == "draft-from-topic":
             sys.exit(cmd_draft_from_topic(args))
         elif args.command == "auto-draft":
