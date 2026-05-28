@@ -25,7 +25,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
-from source_gate import REQUIRED_CATEGORIES, classify_source, source_url  # noqa: E402
+from source_gate import ALL_CATEGORIES, REQUIRED_CATEGORIES, classify_source, source_url  # noqa: E402
 
 SEARCH_DOMAINS_BY_TYPE = {
     "official_docs": "official docs documentation release notes",
@@ -149,8 +149,10 @@ def evidence_plan(topic: dict[str, Any]) -> list[dict[str, str]]:
         title = topic_title(topic)
         normalized = [
             {"source_type": "official_docs", "query": f"{title} official documentation release notes"},
-            {"source_type": "community", "query": f"{title} discussion Hacker News Reddit X"},
+            {"source_type": "github_or_paper", "query": f"{title} GitHub arXiv technical report"},
+            {"source_type": "earnings", "query": f"{title} investor relations earnings annual report"},
             {"source_type": "mainstream_media", "query": f"{title} Reuters Bloomberg technology"},
+            {"source_type": "community", "query": f"{title} discussion Hacker News Reddit X"},
         ]
     return dedupe_plans(normalized)
 
@@ -281,7 +283,9 @@ def candidate_sources(payload: dict[str, Any], topic: dict[str, Any], plans: lis
                 results = [{"title": f"search failed: {query}", "url": "", "error": str(exc), "query": query, "origin": "duckduckgo"}]
         for result in results[: args.per_query_limit]:
             source = dict(result)
-            source.setdefault("source_type", plan["source_type"])
+            source.setdefault("intended_source_type", plan["source_type"])
+            if not source.get("source_type") and not source.get("category"):
+                source["source_type"] = infer_source_type_from_url(source_url(source)) or plan["source_type"]
             source.setdefault("research_query", query)
             source.setdefault("search_query", search_query)
             candidates.append(source)
@@ -293,6 +297,21 @@ def augment_query(query: str, source_type: str) -> str:
     if not suffix or any(token in query.lower() for token in ["site:", "official", "github", "arxiv", "reuters", "bloomberg", "reddit", "ycombinator"]):
         return query
     return f"{query} {suffix}"
+
+
+def infer_source_type_from_url(url: str) -> str:
+    lower = url.lower()
+    if any(token in lower for token in ["github.com", "arxiv.org", "openreview.net", "huggingface.co"]):
+        return "github_or_paper"
+    if any(token in lower for token in ["docs", "documentation", "platform.openai.com", "developers.", "cloud.google.com"]):
+        return "official_docs"
+    if any(token in lower for token in ["sec.gov", "investor", "earnings", "annual-report"]):
+        return "earnings"
+    if any(token in lower for token in ["reddit.com", "news.ycombinator.com", "x.com", "twitter.com", "youtube.com"]):
+        return "community"
+    if any(token in lower for token in ["reuters.com", "bloomberg.com", "ft.com", "wsj.com", "theinformation.com", "technologyreview.com"]):
+        return "mainstream_media"
+    return ""
 
 
 def dedupe_sources(sources: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -336,12 +355,13 @@ def enrich_and_score_sources(sources: list[dict[str, Any]]) -> list[dict[str, An
 def source_score(source: dict[str, Any], index: int) -> int:
     categories = classify_source(source)
     score = 10 - min(index, 5)
+    # First-hand sources drive the article facts; community/media are useful but optional.
     if "primary" in categories:
-        score += 5
+        score += 8
     if "media_or_secondary" in categories:
-        score += 4
-    if "community" in categories:
         score += 3
+    if "community" in categories:
+        score += 1
     declared = normalize_source_type(str(source.get("source_type") or ""))
     if declared in {"official_docs", "github_or_paper", "github", "paper", "earnings"} and "primary" in categories:
         score += 2
@@ -353,17 +373,18 @@ def source_score(source: dict[str, Any], index: int) -> int:
 
 
 def build_summary(sources: list[dict[str, Any]]) -> dict[str, Any]:
-    counts = {key: 0 for key in REQUIRED_CATEGORIES}
+    counts = {key: 0 for key in ALL_CATEGORIES}
     for source in sources:
         for category in source.get("categories") or classify_source(source):
             if category in counts:
                 counts[category] += 1
-    missing = [key for key, count in counts.items() if count < 1]
+    missing = [key for key, count in counts.items() if key in REQUIRED_CATEGORIES and count < 1]
     return {
         "passed": not missing,
         "total_sources": len(sources),
         "categories": counts,
         "missing_categories": missing,
+        "optional_categories": [key for key in counts if key not in REQUIRED_CATEGORIES and counts[key] < 1],
     }
 
 
@@ -375,14 +396,14 @@ def update_topic_payload(payload: dict[str, Any], selected_topic: dict[str, Any]
         for topic in topics:
             if isinstance(topic, dict) and same_topic(topic, selected_topic):
                 topic["sources"] = clean_sources
-                topic["research_sources"] = {"status": "complete", "count": len(clean_sources)}
+                topic["research_sources"] = {"status": "complete", "count": len(clean_sources), "policy": "first_hand_primary_required"}
                 break
     elif isinstance(updated.get("topic"), dict):
         updated["topic"]["sources"] = clean_sources
-        updated["topic"]["research_sources"] = {"status": "complete", "count": len(clean_sources)}
+        updated["topic"]["research_sources"] = {"status": "complete", "count": len(clean_sources), "policy": "first_hand_primary_required"}
     else:
         updated["sources"] = clean_sources
-        updated["research_sources"] = {"status": "complete", "count": len(clean_sources)}
+        updated["research_sources"] = {"status": "complete", "count": len(clean_sources), "policy": "first_hand_primary_required"}
     return updated
 
 
@@ -408,7 +429,7 @@ def clean_sources_for_manifest(sources: list[dict[str, Any]]) -> list[dict[str, 
 def build_report(topic: dict[str, Any], plans: list[dict[str, str]], sources: list[dict[str, Any]]) -> dict[str, Any]:
     summary = build_summary(sources)
     return {
-        "policy": "国内热点发现，海外信息补证；sources must satisfy source_gate required mix",
+        "policy": "国内热点发现，海外一手资料优先补证；require at least one first-hand primary source; community/media are optional supporting signals; source URLs stay in ledger/manifest, not necessarily in article body",
         "topic_title": topic_title(topic),
         "evidence_plan": plans,
         "summary": summary,

@@ -57,10 +57,13 @@ MEDIA_DOMAINS = {
 }
 
 REQUIRED_CATEGORIES = {
-    "primary": "至少 1 个官方/GitHub/论文/财报来源",
-    "community": "至少 1 个社区讨论来源：X / Reddit / HN / YouTube 官方访谈",
-    "media_or_secondary": "至少 1 个英文主流媒体或强二手验证来源",
+    "primary": "至少 1 个一手来源：官方文档/GitHub/论文/财报/产品公告",
 }
+OPTIONAL_CATEGORIES = {
+    "community": "可选：社区讨论来源仅用于用户反馈/争议线索，不作为重大事实单独依据",
+    "media_or_secondary": "可选：英文主流媒体或强二手验证用于交叉验证，不要求硬凑齐",
+}
+ALL_CATEGORIES = {**REQUIRED_CATEGORIES, **OPTIONAL_CATEGORIES}
 
 
 def configure_stdio() -> None:
@@ -183,7 +186,7 @@ def collect_sources(article_dir: Path) -> list[dict[str, Any]]:
 def build_report(article_dir: Path) -> dict[str, Any]:
     sources = collect_sources(article_dir)
     enriched: list[dict[str, Any]] = []
-    category_counts = {key: 0 for key in REQUIRED_CATEGORIES}
+    category_counts = {key: 0 for key in ALL_CATEGORIES}
     invalid_sources = 0
 
     for source in sources:
@@ -203,21 +206,33 @@ def build_report(article_dir: Path) -> dict[str, Any]:
             "declared_type": source.get("source_type") or source.get("category") or "",
         })
 
-    missing = [key for key, count in category_counts.items() if count < 1]
+    required_missing = [key for key, count in category_counts.items() if key in REQUIRED_CATEGORIES and count < 1]
     checks = [
         {
             "name": key,
-            "status": "pass" if key not in missing else "fail",
+            "status": "pass" if key not in required_missing else "fail",
             "detail": REQUIRED_CATEGORIES[key],
             "count": category_counts[key],
+            "required": True,
         }
         for key in REQUIRED_CATEGORIES
     ]
-    passed = not missing
+    checks.extend(
+        {
+            "name": key,
+            "status": "info" if category_counts[key] < 1 else "pass",
+            "detail": OPTIONAL_CATEGORIES[key],
+            "count": category_counts[key],
+            "required": False,
+        }
+        for key in OPTIONAL_CATEGORIES
+    )
+    passed = not required_missing
     report = {
         "article_dir": str(article_dir),
-        "policy": "domestic_hotspots_overseas_evidence: require primary + community + media_or_secondary",
+        "policy": "domestic_hotspots_overseas_evidence: first_hand_primary_required; community/media optional; article links not required",
         "requirements": REQUIRED_CATEGORIES,
+        "optional_categories": OPTIONAL_CATEGORIES,
         "checks": checks,
         "sources": enriched,
         "summary": {
@@ -225,7 +240,7 @@ def build_report(article_dir: Path) -> dict[str, Any]:
             "total_sources": len(enriched),
             "invalid_sources": invalid_sources,
             "categories": category_counts,
-            "missing_categories": missing,
+            "missing_categories": required_missing,
         },
     }
     return report

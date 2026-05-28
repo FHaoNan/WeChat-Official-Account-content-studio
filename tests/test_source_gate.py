@@ -123,6 +123,25 @@ class SourceGateTests(unittest.TestCase):
         self.assertEqual(checks["source_credibility"]["status"], "pass")
         self.assertEqual(quality["artifacts"]["source_report"], str(article_dir / "generated" / "source-report.json"))
 
+    def test_source_gate_passes_with_first_hand_sources_without_forcing_three_categories(self):
+        article_dir = self.make_article("first-hand-only")
+        (article_dir / "generated" / "sources.json").write_text(json.dumps({
+            "sources": [
+                {"title": "OpenAI docs", "url": "https://platform.openai.com/docs/guides/tools", "source_type": "official_docs"},
+                {"title": "OpenAI cookbook", "url": "https://github.com/openai/openai-cookbook", "source_type": "github"},
+            ]
+        }, ensure_ascii=False), encoding="utf-8")
+
+        proc = self.run_source_gate(article_dir)
+        payload = json.loads(proc.stdout)
+
+        self.assertTrue(payload["summary"]["passed"])
+        self.assertGreaterEqual(payload["summary"]["categories"]["primary"], 2)
+        self.assertEqual(payload["summary"]["categories"].get("community", 0), 0)
+        self.assertEqual(payload["summary"]["categories"].get("media_or_secondary", 0), 0)
+        self.assertEqual(payload["summary"]["missing_categories"], [])
+        self.assertIn("first_hand", payload["policy"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -295,7 +295,7 @@ def cmd_publish_ready(args) -> int:
             summary = source_report.get("summary", {}) if isinstance(source_report.get("summary"), dict) else {}
             ok = bool(summary.get("passed"))
             missing = summary.get("missing_categories", []) or []
-            checks.append(_publish_ready_check("source_credibility", ok, "source evidence mix ok" if ok else f"missing source categories: {', '.join(missing)}", summary))
+            checks.append(_publish_ready_check("source_credibility", ok, "first-hand source evidence ok" if ok else f"missing required source categories: {', '.join(missing)}", summary))
         except Exception as exc:
             checks.append(_publish_ready_check("source_report_json", False, f"source-report.json invalid: {exc}"))
 

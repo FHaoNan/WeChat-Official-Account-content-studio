@@ -61,6 +61,13 @@ class PublishReadyTests(unittest.TestCase):
         for name in ["img-01.jpg", "cover-wide.jpg", "cover-square.jpg"]:
             (assets / name).write_bytes(b"placeholder")
         if ready_reports:
+            (generated / "sources.json").write_text(json.dumps({
+                "sources": [
+                    {"title": "OpenAI tools docs", "url": "https://platform.openai.com/docs/guides/tools", "source_type": "official_docs", "categories": ["primary"]}
+                ]
+            }, ensure_ascii=False), encoding="utf-8")
+            (generated / "humanness-report.json").write_text(json.dumps({"summary": {"passed": True}}, ensure_ascii=False), encoding="utf-8")
+            (generated / "image-prompts.md").write_text("# image prompts\n\n- img-01.jpg\n", encoding="utf-8")
             (generated / "source-report.json").write_text(json.dumps({
                 "summary": {"passed": True, "missing_categories": []},
             }, ensure_ascii=False), encoding="utf-8")
@@ -102,7 +109,7 @@ class PublishReadyTests(unittest.TestCase):
 
     def test_publish_ready_default_requires_publish_draft_dry_run(self):
         article_dir = self.make_article(ready_reports=True)
-        proc = self.run_cli("publish-ready", "--article-dir", str(article_dir), expect=1)
+        proc = self.run_cli("publish-ready", "--article-dir", str(article_dir), "--config", str(self.tmp / "missing-config.yaml"), expect=1)
         payload = json.loads(proc.stdout)
         checks = {item["name"]: item for item in payload["checks"]}
         self.assertEqual(checks["publish_dry_run"]["status"], "fail")

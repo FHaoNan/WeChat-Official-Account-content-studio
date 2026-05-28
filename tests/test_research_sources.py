@@ -89,14 +89,14 @@ class ResearchSourcesTests(unittest.TestCase):
             self.assertIn("sources", merged_topic["topics"][0])
             self.assertEqual(len(merged_topic["topics"][0]["sources"]), 4)
 
-    def test_research_sources_fails_closed_when_required_category_missing(self):
+    def test_research_sources_fails_closed_when_first_hand_source_is_missing(self):
         with tempfile.TemporaryDirectory(prefix="wewrite-research-sources-") as raw_tmp:
             tmpdir = Path(raw_tmp)
             topic = self.write_topic(tmpdir)
             fixture = tmpdir / "search-results.json"
             fixture.write_text(json.dumps({
                 "results": [
-                    {"title": "OpenAI tools documentation", "url": "https://platform.openai.com/docs/guides/tools"},
+                    {"title": "HN: Agent costs", "url": "https://news.ycombinator.com/item?id=123"},
                     {"title": "Reuters: AI agents and cost", "url": "https://www.reuters.com/technology/artificial-intelligence/example"}
                 ]
             }, ensure_ascii=False), encoding="utf-8")
@@ -109,7 +109,7 @@ class ResearchSourcesTests(unittest.TestCase):
             )
             payload = json.loads(proc.stdout)
             self.assertFalse(payload["summary"]["passed"])
-            self.assertIn("community", payload["summary"]["missing_categories"])
+            self.assertIn("primary", payload["summary"]["missing_categories"])
 
     def test_research_sources_output_can_feed_draft_from_topic(self):
         with tempfile.TemporaryDirectory(prefix="wewrite-research-to-draft-") as raw_tmp:
@@ -137,6 +137,33 @@ class ResearchSourcesTests(unittest.TestCase):
             draft_payload = json.loads(proc.stdout)
             source_report = json.loads(Path(draft_payload["artifacts"]["source_report"]).read_text(encoding="utf-8"))
             self.assertTrue(source_report["summary"]["passed"])
+
+    def test_research_sources_passes_with_first_hand_sources_without_community_or_media(self):
+        with tempfile.TemporaryDirectory(prefix="wewrite-research-first-hand-") as raw_tmp:
+            tmpdir = Path(raw_tmp)
+            topic = self.write_topic(tmpdir)
+            fixture = tmpdir / "search-results.json"
+            fixture.write_text(json.dumps({
+                "results": [
+                    {"query": "OpenAI tools docs agent token cost", "title": "OpenAI tools documentation", "url": "https://platform.openai.com/docs/guides/tools"},
+                    {"query": "OpenAI tools docs agent token cost", "title": "OpenAI cookbook", "url": "https://github.com/openai/openai-cookbook"}
+                ]
+            }, ensure_ascii=False), encoding="utf-8")
+            out_sources = tmpdir / "sources.json"
+
+            proc = self.run_script(
+                "--topic-file", str(topic),
+                "--search-fixture", str(fixture),
+                "--output", str(out_sources),
+                "--json",
+            )
+            payload = json.loads(proc.stdout)
+            self.assertTrue(payload["summary"]["passed"])
+            self.assertGreaterEqual(payload["summary"]["categories"]["primary"], 2)
+            self.assertEqual(payload["summary"]["missing_categories"], [])
+            self.assertIn("first-hand", payload["policy"])
+            sources = json.loads(out_sources.read_text(encoding="utf-8"))["sources"]
+            self.assertTrue(all("primary" in item.get("categories", []) for item in sources))
 
 
 if __name__ == "__main__":

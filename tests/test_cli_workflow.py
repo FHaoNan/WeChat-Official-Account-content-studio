@@ -150,10 +150,11 @@ class CliWorkflowTests(unittest.TestCase):
     def test_publish_draft_dry_run_validates_before_config_and_does_not_upload(self):
         proc = self.run_cli("new", "--title", "P0 干跑测试", "--author", "烧 Token 的人")
         article_dir = Path(json.loads(proc.stdout)["article_dir"])
-        proc = self.run_cli("publish-draft", "--article-dir", str(article_dir), "--dry-run", expect=1)
+        proc = self.run_cli("publish-draft", "--article-dir", str(article_dir), "--dry-run", "--config", str(self.tmp / "missing-config.yaml"), expect=1)
         payload = json.loads(proc.stderr)
         self.assertFalse(payload["success"])
-        self.assertIn("No publish config.yaml found", payload["error"])
+        self.assertIn("config", payload["error"].lower())
+        self.assertIn("not found", payload["error"].lower())
         self.assertFalse((article_dir / "generated" / "draft.json").exists())
 
     def test_draft_from_topic_creates_article_sources_and_reports(self):

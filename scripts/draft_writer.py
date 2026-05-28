@@ -160,7 +160,6 @@ def build_article(topic: dict[str, Any], claims: list[dict[str, Any]]) -> str:
     second_claim = claims[1]["source_id"] if len(claims) > 1 else first_claim
     third_claim = claims[2]["source_id"] if len(claims) > 2 else first_claim
     evidence_lines = "\n".join(claim_sentence(claim) for claim in claims) or "- 暂无可引用事实。"
-    source_refs = "\n".join(f"- [{claim['source_id']}] [{claim['title']}]({claim['url']})（{claim['category']}）" for claim in claims)
 
     return textwrap.dedent(f"""\
     # {title}
@@ -187,7 +186,7 @@ def build_article(topic: dict[str, Any], claims: list[dict[str, Any]]) -> str:
 
     {evidence_lines}
 
-    这三类证据要分开看：一手来源负责确认产品或技术机制，社区讨论负责暴露真实使用摩擦，英文媒体或强二手来源负责交叉验证产业判断。只要其中一类缺失，文章就容易变成观点先行。
+    这三类证据要分开看：一手来源负责确认产品或技术机制，社区讨论只负责暴露真实使用摩擦，英文媒体或强二手来源负责交叉验证产业判断。文章正文不需要堆链接，链接和来源 URL 会保留在内部 evidence ledger 里；如果缺少一手来源，才应该阻塞发布 [{first_claim}]。
 
     ## 对用户真正有影响的地方
 
@@ -203,17 +202,13 @@ def build_article(topic: dict[str, Any], claims: list[dict[str, Any]]) -> str:
     ## 结尾判断
 
     所以，这个热点可以先记住一句话：Agent 的价值来自“多做几步”，成本也恰好烧在“多做几步”。真正值得关注的不是它能不能完成一个 demo，而是当任务变长、工具变多、上下文变厚之后，系统还能不能用可承受的 token 预算稳定跑完 [{first_claim}][{second_claim}][{third_claim}]。
-
-    ## 来源
-
-    {source_refs}
     """)
 
 
 def build_ledger(topic: dict[str, Any], claims: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "topic_title": topic_title(topic),
-        "policy": "Every key claim keeps a source_id and URL. Missing snippets are marked as needing deeper original-text extraction instead of fabricated.",
+        "policy": "Visible article citations use source IDs only; source URLs stay in this internal ledger. Key facts should prefer first-hand/primary sources; community and media are supporting signals, not mandatory categories.",
         "claims": claims,
     }
 

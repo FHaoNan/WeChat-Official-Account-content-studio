@@ -42,7 +42,7 @@
 不要把热点源和事实源混在一起。
 
 - 热点源：保留国内平台，负责发现公众号读者正在关心什么。
-- 事实源：优先海外官方、GitHub、论文、财报、英文主流媒体、X/Reddit/Hacker News/YouTube 线索交叉验证。
+- 事实源：优先海外官方、GitHub、论文、财报、英文主流媒体；X/Reddit/Hacker News/YouTube 只作为用户反馈和争议线索。重大事实必须尽量回到一手/primary 来源，社区和媒体不再要求三类硬凑齐。
 - 中文公众号或中文媒体：只做风格参考、国内语境和传播背景，不作为重大事实默认来源。
 
 执行时的标准流程：
@@ -138,14 +138,15 @@ python3 scripts/select_ai_topics.py --hotspots output/hotspots.json --style styl
 
 最低要求：
 
-- 至少 1 个官方/GitHub/论文/财报来源。
-- 至少 1 个社区讨论来源，可来自 X、Reddit、Hacker News、YouTube 官方访谈。
-- 至少 1 个英文主流媒体或其他强二手验证来源。
-- X、Reddit、YouTube 不能单独支撑重大事实。
+- 至少 1 个一手/primary 来源：官方文档、GitHub、论文、财报、产品公告、监管文件等。
+- 社区讨论来源可来自 X、Reddit、Hacker News、YouTube 官方访谈，用于读者痛点、争议和使用反馈，不作为重大事实单独依据。
+- 英文主流媒体或其他强二手验证来源用于产业判断交叉验证，但不再硬性要求每篇齐全。
+- 中文媒体和国内二手转述不能单独支撑重大事实。
 
 #### P2 验收标准
 
 - 生成 `generated/source-report.json`。
+- 只缺社区/媒体来源时不 fail；缺少一手/primary 来源时 fail closed。
 - 证据不足时写入 `quality-gates.json` 的 warning/fail。
 - 投资/产业链内容不得出现荐股、买卖点或确定性收益措辞。
 

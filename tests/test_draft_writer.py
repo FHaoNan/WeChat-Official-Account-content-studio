@@ -124,6 +124,28 @@ class DraftWriterTests(unittest.TestCase):
             self.assertTrue((article_dir / "generated" / "evidence-ledger.json").exists())
             self.assertIn("evidence_ledger", result["artifacts"])
 
+    def test_draft_writer_keeps_source_urls_in_ledger_not_article_body(self):
+        with tempfile.TemporaryDirectory(prefix="wewrite-draft-no-links-") as raw_tmp:
+            tmpdir = Path(raw_tmp)
+            topic, sources = self.write_topic_and_sources(tmpdir)
+            article = tmpdir / "article.md"
+            ledger = tmpdir / "evidence-ledger.json"
+
+            proc = self.run_writer(
+                "--topic-file", str(topic),
+                "--sources-file", str(sources),
+                "--output", str(article),
+                "--ledger-output", str(ledger),
+                "--json",
+            )
+            self.assertTrue(json.loads(proc.stdout)["success"])
+            text = article.read_text(encoding="utf-8")
+            self.assertNotIn("https://", text)
+            self.assertNotIn("## 来源", text)
+            self.assertIn("[S1]", text)
+            ledger_payload = json.loads(ledger.read_text(encoding="utf-8"))
+            self.assertIn("https://platform.openai.com/docs/guides/tools", json.dumps(ledger_payload, ensure_ascii=False))
+
 
 if __name__ == "__main__":
     unittest.main()
