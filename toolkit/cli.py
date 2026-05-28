@@ -427,10 +427,25 @@ def _source_lines(sources: list[dict]) -> str:
 def _write_placeholder_assets(article_dir: Path) -> None:
     assets = article_dir / "assets"
     assets.mkdir(parents=True, exist_ok=True)
-    for name in ["img-01.jpg", "cover-wide.jpg", "cover-square.jpg"]:
+    image_specs = {
+        "img-01.jpg": ("article", "Agent 成本链路总览", "上下文 / 工具调用 / 失败重试"),
+        "img-02.jpg": ("article", "工具调用与上下文膨胀", "每一步都可能继续携带历史"),
+        "img-03.jpg": ("article", "发布前看三项成本", "成本 / 延迟 / 可靠性"),
+        "cover-wide.jpg": ("cover", "Agent 为什么越用越贵", "烧 Token 的人"),
+        "cover-square.jpg": ("square", "Agent 成本", "多步任务的系统账"),
+    }
+    generator = SKILL_ROOT / "scripts" / "make_placeholder_image.py"
+    for name, (size, label, subtitle) in image_specs.items():
         path = assets / name
-        if not path.exists():
-            path.write_bytes(b"placeholder")
+        should_generate = not path.exists() or path.read_bytes() == b"placeholder"
+        if not should_generate:
+            continue
+        code, stdout, stderr = run_python_script_capture(
+            generator,
+            ["--output", str(path), "--label", label, "--subtitle", subtitle, "--size", size],
+        )
+        if code != 0:
+            raise RuntimeError(f"failed to generate placeholder image {path}: {stderr or stdout}")
 
 
 def _build_topic_article(topic: dict, sources: list[dict]) -> str:

@@ -171,11 +171,17 @@ def build_article(topic: dict[str, Any], claims: list[dict[str, Any]]) -> str:
 
     国内热点入口是「{hotspot_source} / {hotspot_title}」。但这篇文章不按热搜复述，而是用海外来源先把事实边界钉住，再回到一个工程问题：{engineering_question} [{first_claim}]
 
+    ![Agent 成本链路总览](img-01.jpg)
+    *图 1：从一次问答变成多步 Agent 后，token 成本会沿着上下文、工具调用和失败重试一起累积 [{first_claim}]。*
+
     ## 为什么它会烧 token
 
     {angle} [{first_claim}]
 
     一个多步 Agent 往往不是只调用一次模型。它需要判断任务、选择工具、读工具返回、再决定下一步；每一步都可能把前面的上下文继续带进去。官方文档层面的事实说明，工具调用会把外部函数和 API 纳入模型应用流程 [{first_claim}]。这意味着，产品体验里看起来像“一次完成”的动作，工程上可能已经拆成了多轮模型和工具交互。
+
+    ![工具调用与上下文膨胀](img-02.jpg)
+    *图 2：工具调用越多，历史上下文、工具返回和检查步骤越容易叠加成系统账 [{second_claim}]。*
 
     ## 证据链
 
@@ -186,6 +192,9 @@ def build_article(topic: dict[str, Any], claims: list[dict[str, Any]]) -> str:
     ## 对用户真正有影响的地方
 
     对使用者来说，问题不是“Agent 贵不贵”这么笼统，而是它把成本藏到了哪些地方：更长的上下文、更频繁的工具调用、更多失败重试，以及为了稳定性增加的检查步骤。社区讨论里的开发者抱怨多步 Agent 会因为重试工具调用和携带长上下文而快速消耗 token [{second_claim}]，这正好解释了为什么同样一个任务，用 Agent 做可能比直接问答更贵。
+
+    ![发布前应该看的三项成本](img-03.jpg)
+    *图 3：判断一个 Agent 产品能否长期使用，至少要同时看成本、延迟和可靠性 [{third_claim}]。*
 
     ## 对公司真正有影响的地方
 

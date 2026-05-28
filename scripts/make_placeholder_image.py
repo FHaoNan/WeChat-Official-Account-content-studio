@@ -23,6 +23,23 @@ SIZE_PRESETS = {
 
 def _load_font(size: int):
     candidates = [
+        # macOS CJK fonts first. The previous Latin-only list rendered Chinese as
+        # tofu/garbled boxes in WeChat cover/article images.
+        "/System/Library/Fonts/PingFang.ttc",
+        "/System/Library/Fonts/STHeiti Medium.ttc",
+        "/System/Library/Fonts/STHeiti Light.ttc",
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
+        "/System/Library/Fonts/Supplemental/Songti.ttc",
+        # Linux common CJK fonts.
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/opentype/noto/NotoSansCJKsc-Regular.otf",
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc",
+        "/usr/share/fonts/truetype/wqy/wqy-microhei.ttc",
+        "/usr/share/fonts/truetype/arphic/uming.ttc",
+        # Windows CJK fonts.
+        r"C:\Windows\Fonts\msyh.ttc",
+        r"C:\Windows\Fonts\simhei.ttf",
+        # Latin fallbacks only after CJK fonts.
         "arial.ttf",
         "segoeui.ttf",
         "calibri.ttf",
@@ -32,10 +49,17 @@ def _load_font(size: int):
     ]
     for candidate in candidates:
         try:
-            return ImageFont.truetype(candidate, size=size)
+            path = Path(candidate)
+            if path.is_absolute() and not path.exists():
+                continue
+            font = ImageFont.truetype(candidate, size=size)
+            setattr(font, "_selected_font_path", candidate)
+            return font
         except OSError:
             continue
-    return ImageFont.load_default()
+    font = ImageFont.load_default()
+    setattr(font, "_selected_font_path", "PIL_DEFAULT_FONT")
+    return font
 
 
 def _fit_text(draw: ImageDraw.ImageDraw, text: str, max_width: int):
@@ -48,53 +72,49 @@ def _fit_text(draw: ImageDraw.ImageDraw, text: str, max_width: int):
 
 
 def build_placeholder(width: int, height: int, label: str, subtitle: str) -> Image.Image:
-    img = Image.new("RGB", (width, height), "#0b1733")
+    img = Image.new("RGB", (width, height), "#f8fafc")
     draw = ImageDraw.Draw(img)
 
+    # Clean Token Burner visual direction: white/cool-gray canvas with restrained
+    # low-saturation accents. Avoid dark neon/cyberpunk blue placeholders.
     for y in range(height):
-        r = int(11 + (24 - 11) * y / max(height, 1))
-        g = int(23 + (63 - 23) * y / max(height, 1))
-        b = int(51 + (112 - 51) * y / max(height, 1))
+        t = y / max(height - 1, 1)
+        r = int(248 + (241 - 248) * t)
+        g = int(250 + (245 - 250) * t)
+        b = int(252 + (249 - 252) * t)
         draw.line([(0, y), (width, y)], fill=(r, g, b))
 
-    margin = max(24, width // 28)
+    margin = max(28, width // 26)
+    card = (margin, margin, width - margin, height - margin)
+    draw.rounded_rectangle(card, radius=max(18, width // 46), fill="#ffffff", outline="#d9e2ec", width=max(2, width // 420))
+
+    accent = "#8abf8f"
+    muted_blue = "#dbeafe"
     draw.rounded_rectangle(
-        (margin, margin, width - margin, height - margin),
-        radius=max(18, width // 40),
-        outline="#4cb6ff",
-        width=max(2, width // 320),
+        (margin * 1.45, margin * 1.55, width - margin * 1.45, height - margin * 1.55),
+        radius=max(16, width // 58),
+        fill="#f9fbfd",
+        outline="#e5edf5",
+        width=max(1, width // 520),
     )
+    draw.rectangle((margin * 1.45, height - margin * 1.8, width - margin * 1.45, height - margin * 1.8 + max(7, height // 64)), fill=accent)
+    draw.rounded_rectangle((margin * 1.45, margin * 1.2, margin * 1.45 + width * 0.16, margin * 1.2 + max(8, height // 38)), radius=8, fill=muted_blue)
 
-    panel_top = height * 0.23
-    panel_bottom = height * 0.77
-    draw.rounded_rectangle(
-        (margin * 1.5, panel_top, width - margin * 1.5, panel_bottom),
-        radius=max(16, width // 48),
-        outline="#22d3c5",
-        width=max(2, width // 360),
-    )
-
-    accent_y = int(height * 0.82)
-    draw.rectangle(
-        (margin * 1.5, accent_y, width - margin * 1.5, accent_y + max(8, height // 50)),
-        fill="#f29a38",
-    )
-
-    label_font = _fit_text(draw, label, int(width * 0.55))
+    label_font = _fit_text(draw, label, int(width * 0.62))
     subtitle_font = _load_font(max(18, width // 42))
 
     label_bbox = draw.textbbox((0, 0), label, font=label_font)
     label_w = label_bbox[2] - label_bbox[0]
     label_h = label_bbox[3] - label_bbox[1]
     label_x = (width - label_w) / 2
-    label_y = height * 0.39 - label_h / 2
-    draw.text((label_x, label_y), label, fill="#f2f7ff", font=label_font)
+    label_y = height * 0.42 - label_h / 2
+    draw.text((label_x, label_y), label, fill="#111827", font=label_font)
 
     subtitle_bbox = draw.textbbox((0, 0), subtitle, font=subtitle_font)
     subtitle_w = subtitle_bbox[2] - subtitle_bbox[0]
     subtitle_x = (width - subtitle_w) / 2
     subtitle_y = label_y + label_h + max(14, height // 36)
-    draw.text((subtitle_x, subtitle_y), subtitle, fill="#b9c7e6", font=subtitle_font)
+    draw.text((subtitle_x, subtitle_y), subtitle, fill="#4b5563", font=subtitle_font)
 
     return img.filter(ImageFilter.SMOOTH)
 
