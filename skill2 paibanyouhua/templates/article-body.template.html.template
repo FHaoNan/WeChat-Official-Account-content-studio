@@ -1,7 +1,7 @@
-<div style="background-color:#f5f7fb;padding:40px 10px;">
-  <section style="max-width:800px;margin:0 auto;padding:28px;background-color:#ffffff;border:1px solid rgba(74,124,155,0.08);box-shadow:0 8px 28px rgba(58,65,80,0.06);border-radius:14px;">
-    <h1 style="margin:0 0 18px;color:#24384d;font-size:30px;line-height:1.35;">{{TITLE}}</h1>
-    <p style="margin:0 0 18px;color:#5f6f80;font-size:15px;line-height:1.8;">{{DIGEST}}</p>
-    <section style="margin-top:22px;">{{CONTENT}}</section>
+<div style="background-color:#ffffff;padding:0 16px;box-sizing:border-box;">
+  <section style="max-width:677px;margin:0 auto;padding:0;background-color:#ffffff;border:none;box-shadow:none;border-radius:0;box-sizing:border-box;">
+    <h1 style="margin:0 0 16px;color:#111827;font-size:24px;line-height:1.36;font-weight:850;letter-spacing:-0.02em;">{{TITLE}}</h1>
+    <p style="margin:0 0 18px;color:#6b7280;font-size:14px;line-height:1.65;letter-spacing:0.01em;">{{DIGEST}}</p>
+    <section style="margin-top:18px;">{{CONTENT}}</section>
   </section>
 </div>

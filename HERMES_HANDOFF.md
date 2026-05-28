@@ -107,6 +107,7 @@ python3 toolkit/cli.py publish-draft --article-dir output/xxx --dry-run
   - `generated/quality-gates.json`
 - `publish-draft --dry-run` 不上传素材、不创建草稿，只验证配置、文章、图片、质量门禁。
 - P13 图片系统已升级为“画面优先 + 少量标签 + 信息结构”：`draft-from-topic` 会产出 `generated/visual-plan.json`、`generated/image-prompts.md`、每图一个 `generated/*-visual-spec.json`，并用 `make_placeholder_image.py --visual-spec` 生成结构化本地预览图，不再默认交付大字文字卡片。
+- P14 微信渲染边距已按手机端优化：模板 shell 使用白底、`padding:0 16px`、`max-width:677px`、无桌面阴影卡片；converter 会在主题样式后统一收紧正文段落、让图片在安全区内 `width:100%`、降低图注间距，并把引用/代码卡片改成手机友好的 14-15px 内边距。
 - 保留 Windows PowerShell wrapper，但主逻辑应迁移到 Python，PowerShell 只做薄包装。
 
 ### P1：把国内热点抓取升级为 AI 选题源

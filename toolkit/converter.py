@@ -90,6 +90,9 @@ class WeChatConverter:
         # Apply WeChat compatibility fixes
         html = self._apply_wechat_fixes(html)
 
+        # Normalize mobile WeChat spacing after theme/layout styles.
+        html = self._apply_mobile_render_spacing(html)
+
         # Inject dark mode attributes
         html = self._inject_darkmode(html)
 
@@ -249,6 +252,97 @@ class WeChatConverter:
             style = pre.get("style", "")
             if "white-space" not in style:
                 pre["style"] = f"{style}; white-space: pre-wrap; word-wrap: break-word" if style else "white-space: pre-wrap; word-wrap: break-word"
+
+        return str(soup)
+
+    @staticmethod
+    def _style_to_dict(style: str) -> dict[str, str]:
+        values: dict[str, str] = {}
+        for item in style.split(";"):
+            if ":" not in item:
+                continue
+            key, val = item.split(":", 1)
+            values[key.strip()] = val.strip()
+        return values
+
+    @staticmethod
+    def _dict_to_style(values: dict[str, str]) -> str:
+        return "; ".join(f"{key}: {val}" for key, val in values.items())
+
+    def _merge_style(self, elem, updates: dict[str, str]) -> None:
+        style = self._style_to_dict(elem.get("style", ""))
+        style.update(updates)
+        elem["style"] = self._dict_to_style(style)
+
+    def _apply_mobile_render_spacing(self, html: str) -> str:
+        """Normalize phone-first WeChat spacing after theme styles.
+
+        The public article shell already supplies the outside safe area. Inside the
+        content body we keep paragraphs dense, images full-width within the safe
+        area, and cards narrow enough to avoid the "desktop card inside mobile"
+        look in the WeChat editor.
+        """
+        soup = BeautifulSoup(html, "html.parser")
+
+        for p in soup.find_all("p"):
+            # Figure captions usually contain only an image/em pair; keep them tight
+            # so the image does not create a big vertical gap on phones.
+            if p.find("img"):
+                self._merge_style(p, {
+                    "margin": "18px 0 14px 0",
+                    "padding": "0",
+                    "text-indent": "0",
+                    "line-height": "1.55",
+                })
+            else:
+                self._merge_style(p, {
+                    "font-size": "16px",
+                    "line-height": "1.74",
+                    "margin": "0 0 14px 0",
+                    "text-indent": "0",
+                    "letter-spacing": "0.02em",
+                })
+
+        for img in soup.find_all("img"):
+            self._merge_style(img, {
+                "display": "block",
+                "width": "100%",
+                "max-width": "100%",
+                "height": "auto",
+                "margin": "18px 0 6px 0",
+                "border-radius": "10px",
+            })
+
+        for em in soup.find_all("em"):
+            self._merge_style(em, {
+                "font-size": "13px",
+                "line-height": "1.55",
+                "color": self._theme.colors.get("text_light", "#666666"),
+            })
+
+        for blockquote in soup.find_all("blockquote"):
+            self._merge_style(blockquote, {
+                "margin": "18px 0",
+                "padding": "14px 15px",
+                "border-radius": "12px",
+                "box-sizing": "border-box",
+            })
+
+        for pre in soup.find_all("pre"):
+            self._merge_style(pre, {
+                "margin": "18px 0",
+                "padding": "14px",
+                "border-radius": "10px",
+                "box-sizing": "border-box",
+                "max-width": "100%",
+            })
+
+        # Section-based list items are generated for WeChat compatibility; align
+        # their rhythm with paragraphs instead of the older roomy desktop spacing.
+        for section in soup.find_all("section"):
+            style = str(section.get("style", ""))
+            if "display: flex" in style and "align-items: flex-start" in style:
+                self._merge_style(section, {"margin-bottom": "10px"})
 
         return str(soup)
 

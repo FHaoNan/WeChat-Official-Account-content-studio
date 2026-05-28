@@ -62,6 +62,7 @@ allowed-tools:
 - `article.md` 是唯一正文源文件；`article-body.template.html`、`preview.html`、`generated/output.html`、`generated/draft.json` 都由模板脚本自动生成。
 - 图片统一放在 `assets/`，配图提示词统一放在 `generated/image-prompts.md`，结构化视觉规划统一放在 `generated/visual-plan.json`。
 - 图位文件名必须稳定；后续替换图片时，优先直接覆盖 `assets/` 里的同名文件，不要反复改 Markdown 路径。
+- P14 后微信渲染默认按手机端安全区优化：外层正文 shell 使用白底、`padding:0 16px`、`max-width:677px`、无桌面卡片阴影；正文段落 `line-height` 约 1.74、段后约 14px；正文图片在安全区内 `width:100%`，不再 `24px auto` 造成窄图感；引用/代码等卡片使用 14-15px 内边距和 10-12px 圆角。
 - `output/` 目录是默认新稿目录。
 
 **Onboard 例外**：Onboard 是交互式的（需要问用户问题），不受"全自动"约束。Onboard 完成后回到全自动管道。
