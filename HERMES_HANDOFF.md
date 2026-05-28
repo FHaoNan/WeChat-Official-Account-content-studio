@@ -121,8 +121,9 @@ python3 scripts/select_ai_topics.py --hotspots output/hotspots.json --style styl
 职责：
 
 - 读取国内热点。
-- 按 `references/topic-selection.md` 的五维评分筛选。
+- 按 `references/topic-selection.md` 的热点优先评分筛选，提高国内热度与跨平台热度权重。
 - 为每个候选生成「AI 工程师问题」。
+- 输出 `why_now` 和 `platform_heat`，说明为什么今天值得写、来自哪些平台/榜单。
 - 输出海外补证关键词和推荐检索方向。
 
 #### P1 验收标准

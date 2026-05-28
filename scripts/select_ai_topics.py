@@ -104,6 +104,75 @@ def score_heat(item: dict[str, Any]) -> int:
     return clamp(1 + hot / 100 * 9)
 
 
+def extract_platform_signals(item: dict[str, Any]) -> list[dict[str, Any]]:
+    """Return normalized domestic platform signals for traffic-aware ranking."""
+    raw = item.get("platform_signals")
+    signals: list[dict[str, Any]] = []
+    if isinstance(raw, list):
+        for entry in raw:
+            if not isinstance(entry, dict):
+                continue
+            source = str(entry.get("source") or entry.get("platform") or "").strip()
+            if not source:
+                continue
+            signal = dict(entry)
+            signal["source"] = source
+            signals.append(signal)
+    if not signals:
+        source_text = str(item.get("source") or "").strip()
+        sources = [part.strip() for part in re.split(r"[,，/、|]", source_text) if part.strip()]
+        if not sources and source_text:
+            sources = [source_text]
+        for source in sources:
+            signals.append({
+                "source": source,
+                "hot": item.get("hot", 0),
+                "hot_normalized": item.get("hot_normalized", None),
+                "url": item.get("url", ""),
+            })
+    return signals
+
+
+def platform_heat_summary(item: dict[str, Any]) -> dict[str, Any]:
+    signals = extract_platform_signals(item)
+    sources = list(dict.fromkeys(str(signal.get("source") or "").strip() for signal in signals if str(signal.get("source") or "").strip()))
+    platform_count = len(sources)
+    heat_values = []
+    for signal in signals:
+        value = signal.get("hot_normalized", signal.get("hot", 0)) or 0
+        try:
+            heat_values.append(float(value))
+        except Exception:
+            continue
+    top_heat = max(heat_values) if heat_values else float(item.get("hot_normalized", item.get("hot", 0)) or 0)
+    average_heat = sum(heat_values) / len(heat_values) if heat_values else top_heat
+    # One platform = weak cross-platform proof; 2 platforms = meaningful; 3+ = strong current attention.
+    platform_score = clamp(1 + min(platform_count, 4) * 2.2 + min(average_heat, 100) / 100 * 2)
+    return {
+        "sources": sources,
+        "platform_count": platform_count,
+        "top_heat": round(top_heat, 1),
+        "average_heat": round(average_heat, 1),
+        "score": platform_score,
+    }
+
+
+def build_why_now(platform_heat: dict[str, Any], domestic_heat: int, category: str) -> str:
+    sources = platform_heat.get("sources") or []
+    if sources:
+        source_text = "、".join(sources[:4])
+        if len(sources) > 4:
+            source_text += f"等 {len(sources)} 个平台"
+        platform_part = f"它已经出现在{source_text}"
+    else:
+        platform_part = "它已经进入国内热点池"
+    if platform_heat.get("platform_count", 0) >= 2:
+        heat_part = f"，且有跨平台热度信号（国内热度 {domestic_heat}/10）"
+    else:
+        heat_part = f"，当前国内热度 {domestic_heat}/10"
+    return f"{platform_part}{heat_part}；类别为{category}，适合先用国内注意力切入，再用海外一手资料补事实。"
+
+
 def classify_candidate(title: str) -> str:
     if contains_any(title, AI_DIRECT):
         return "直接 AI 热点"
@@ -130,12 +199,17 @@ def score_item(item: dict[str, Any], style: dict[str, Any]) -> dict[str, Any] | 
         return None
 
     category = classify_candidate(text)
+    if category == "纯娱乐/社会/情绪热点" and not contains_any(text, AI_DIRECT + AI_INDIRECT):
+        return None
     direct_hits = count_hits(text, AI_DIRECT)
     indirect_hits = count_hits(text, AI_INDIRECT)
     engineering_hits = count_hits(text, ENGINEERING)
     evidence_hits = count_hits(text, COMMUNITY_EVIDENCE)
 
-    domestic_heat = score_heat(item)
+    platform_heat = platform_heat_summary(item)
+    base_domestic_heat = score_heat(item)
+    # Traffic matters for this account: cross-platform heat should lift suitable AI topics.
+    domestic_heat = clamp(max(base_domestic_heat, platform_heat["top_heat"] / 10) + max(0, platform_heat["platform_count"] - 1) * 0.8)
     ai_relevance = clamp(3 + direct_hits * 3 + indirect_hits * 1.5)
     if category == "纯娱乐/社会/情绪热点":
         ai_relevance = min(ai_relevance, 4)
@@ -148,10 +222,11 @@ def score_item(item: dict[str, Any], style: dict[str, Any]) -> dict[str, Any] | 
         readability -= 1
 
     weighted = round(
-        domestic_heat * 0.20
+        domestic_heat * 0.35
+        + platform_heat["score"] * 0.10
         + ai_relevance * 0.25
-        + engineering_value * 0.25
-        + overseas_evidence * 0.20
+        + engineering_value * 0.15
+        + overseas_evidence * 0.05
         + readability * 0.10,
         2,
     )
@@ -168,7 +243,10 @@ def score_item(item: dict[str, Any], style: dict[str, Any]) -> dict[str, Any] | 
             "url": item.get("url", ""),
             "description": description,
             "category": category,
+            "platform_signals": extract_platform_signals(item),
         },
+        "platform_heat": platform_heat,
+        "why_now": build_why_now(platform_heat, domestic_heat, category),
         "proposed_title": build_title(title, column),
         "ai_engineer_question": question,
         "angle": build_angle(column),
@@ -308,7 +386,7 @@ def build_llm_prompt(topics: list[dict[str, Any]], style: dict[str, Any]) -> str
     }
     return (
         "你是公众号《烧 Token 的人》的选题主编。账号定位：用 AI 大模型工程师视角，讲清楚 AI、模型、产品和那些被烧掉的 token。\n"
-        "政策：国内热点只用于发现读者关心什么；事实、技术判断、产品细节和产业链证据必须优先用海外一手来源、GitHub、论文、官方文档、财报和英文主流媒体补证。\n"
+        "国内热点只用于发现读者关心什么，且当前阶段要优先选择已经进入国内注意力场的 AI 相关热点；事实、技术判断、产品细节和产业链证据必须优先用海外一手来源、GitHub、论文、官方文档、财报和英文主流媒体补证。\n"
         "任务：对候选热点做复评和重排。不要编事实，只判断选题适配度与海外补证方向。\n"
         "只返回 JSON 对象，格式：{\"reviews\":[{\"hotspot_title\":\"...\",\"fit_score\":1-10,\"evidence_plan_score\":1-10,\"write_or_skip\":\"write|skip\",\"editorial_reason\":\"...\",\"token_burner_angle\":\"...\",\"reader_question\":\"...\",\"overseas_evidence_plan\":[{\"source_type\":\"official_docs|github_or_paper|earnings|mainstream_media|community\",\"query\":\"...\"}],\"risk_flags\":[\"...\"]}]}。\n"
         f"账号风格配置：{json.dumps(style_brief, ensure_ascii=False)}\n"
@@ -443,6 +521,8 @@ def render_markdown(topics: list[dict[str, Any]]) -> str:
             "",
             f"- 对应标题（20-28字）：\"{topic['proposed_title']}\"",
             f"- 国内热点来源：{topic['hotspot'].get('source')} / hot={topic['hotspot'].get('hot_normalized') or topic['hotspot'].get('hot')}",
+            f"- 为什么今天值得写：{topic.get('why_now', '')}",
+            f"- 平台热度：{topic.get('platform_heat', {}).get('platform_count', 0)} 个平台 / {','.join(topic.get('platform_heat', {}).get('sources', []))}",
             f"- AI 工程师问题：{topic['ai_engineer_question']}",
             f"- 切入角度：{topic['angle']}",
             f"- 栏目：{topic['column']}",
@@ -500,10 +580,11 @@ def main() -> int:
     payload = {
         "policy": "国内热点发现，海外信息补证",
         "scoring_weights": {
-            "domestic_heat": 0.20,
+            "domestic_heat": 0.35,
+            "platform_heat": 0.10,
             "ai_relevance": 0.25,
-            "engineering_value": 0.25,
-            "overseas_evidence": 0.20,
+            "engineering_value": 0.15,
+            "overseas_evidence": 0.05,
             "readability": 0.10,
             "llm_final_score_when_enabled": {
                 "heuristic_total": 0.45,

@@ -115,15 +115,50 @@ def fetch_baidu() -> list[dict]:
 
 
 def deduplicate(items: list[dict]) -> list[dict]:
-    """Remove duplicates by exact title match."""
-    seen = set()
-    result = []
+    """Merge exact-title duplicates while preserving cross-platform heat signals."""
+    by_title: dict[str, dict] = {}
+    order: list[str] = []
     for item in items:
-        title = item["title"].strip()
-        if title and title not in seen:
-            seen.add(title)
-            result.append(item)
-    return result
+        title = str(item.get("title", "")).strip()
+        if not title:
+            continue
+        source = str(item.get("source", "")).strip()
+        signal = {
+            "source": source,
+            "hot": item.get("hot", 0),
+            "hot_normalized": item.get("hot_normalized", None),
+            "url": item.get("url", ""),
+            "description": item.get("description", ""),
+        }
+        if title not in by_title:
+            merged = dict(item)
+            merged["title"] = title
+            merged["platform_signals"] = [signal] if source else []
+            merged["platform_count"] = 1 if source else 0
+            by_title[title] = merged
+            order.append(title)
+            continue
+        merged = by_title[title]
+        existing_sources = [str(sig.get("source", "")) for sig in merged.get("platform_signals", [])]
+        if source and source not in existing_sources:
+            merged.setdefault("platform_signals", []).append(signal)
+        sources = [str(sig.get("source", "")) for sig in merged.get("platform_signals", []) if str(sig.get("source", ""))]
+        merged["source"] = ",".join(dict.fromkeys(sources))
+        merged["platform_count"] = len(dict.fromkeys(sources))
+        # Keep the strongest platform heat as the representative value for sorting.
+        for key in ["hot", "hot_normalized"]:
+            values = []
+            for sig in merged.get("platform_signals", []):
+                try:
+                    values.append(float(sig.get(key, 0) or 0))
+                except Exception:
+                    continue
+            if values:
+                best = max(values)
+                merged[key] = int(best) if best.is_integer() else round(best, 1)
+        if not merged.get("url") and item.get("url"):
+            merged["url"] = item.get("url")
+    return [by_title[title] for title in order]
 
 
 def main():
@@ -143,10 +178,9 @@ def main():
         else:
             sources_fail.append(name)
 
-    all_items = deduplicate(all_items)
-
-    # Normalize hot values across platforms (different scales: toutiao ~10M, weibo ~1M, baidu ~100K)
-    # Strategy: within each source, rank-based score 0-100, so cross-platform sorting is fair
+    # Normalize hot values within each source before merging duplicates. Different
+    # platforms use incompatible raw scales; rank-based normalized heat is what
+    # downstream topic selection should compare.
     by_source: dict[str, list[dict]] = {}
     for item in all_items:
         by_source.setdefault(item["source"], []).append(item)
@@ -155,8 +189,10 @@ def main():
         items.sort(key=lambda x: int(x.get("hot", 0) or 0), reverse=True)
         n = len(items)
         for rank, item in enumerate(items):
-            # Top item = 100, linear decay to ~1 for last item
             item["hot_normalized"] = round(100 * (n - rank) / n, 1) if n > 0 else 0
+            item["rank"] = rank + 1
+
+    all_items = deduplicate(all_items)
 
     all_items.sort(key=lambda x: x.get("hot_normalized", 0), reverse=True)
     all_items = all_items[:args.limit]

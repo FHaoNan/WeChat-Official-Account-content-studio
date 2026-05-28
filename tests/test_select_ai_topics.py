@@ -55,6 +55,72 @@ class SelectAiTopicsTests(unittest.TestCase):
                 if topic["scores"]["overseas_evidence"] < 5:
                     self.assertFalse(topic["auto_write_allowed"])
 
+    def test_domestic_multi_platform_heat_can_outrank_niche_engineering_topic(self):
+        with tempfile.TemporaryDirectory(prefix="wewrite-topic-traffic-test-") as tmpdir:
+            hotspots = Path(tmpdir) / "hotspots.json"
+            hotspots.write_text(json.dumps({
+                "items": [
+                    {
+                        "title": "豆包 AI 助手登上应用榜引发讨论",
+                        "source": "微博",
+                        "hot_normalized": 92,
+                        "url": "https://example.com/doubao-weibo",
+                        "description": "AI 助手、多平台热议",
+                        "platform_signals": [
+                            {"source": "微博", "hot_normalized": 92, "rank": 3},
+                            {"source": "百度", "hot_normalized": 88, "rank": 6},
+                            {"source": "小红书", "hot_normalized": 80, "rank": 8},
+                        ],
+                    },
+                    {
+                        "title": "小众开源 RAG 框架发布新版本",
+                        "source": "GitHub Trending",
+                        "hot_normalized": 35,
+                        "url": "https://example.com/rag",
+                        "description": "RAG、Agent、开源、GitHub、论文、模型、推理、部署、API",
+                    },
+                    {
+                        "title": "某明星演唱会门票秒空",
+                        "source": "微博",
+                        "hot_normalized": 100,
+                        "url": "https://example.com/star",
+                    },
+                ]
+            }, ensure_ascii=False), encoding="utf-8")
+
+            proc = self.run_script("--hotspots", str(hotspots), "--style", str(REPO_ROOT / "style.yaml"), "--json")
+            self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+            payload = json.loads(proc.stdout)
+            self.assertEqual(payload["scoring_weights"]["domestic_heat"], 0.35)
+            self.assertIn("platform_heat", payload["scoring_weights"])
+            titles = [item["hotspot"]["title"] for item in payload["topics"]]
+            self.assertNotIn("某明星演唱会门票秒空", titles)
+            first = payload["topics"][0]
+            self.assertEqual(first["hotspot"]["title"], "豆包 AI 助手登上应用榜引发讨论")
+            self.assertIn("platform_heat", first)
+            self.assertGreaterEqual(first["platform_heat"]["platform_count"], 3)
+            self.assertIn("why_now", first)
+            self.assertIn("微博", first["why_now"])
+            self.assertIn("百度", first["why_now"])
+            self.assertGreater(first["scores"]["weighted_total"], payload["topics"][1]["scores"]["weighted_total"])
+
+    def test_high_heat_social_topic_is_filtered_when_it_has_no_ai_angle(self):
+        with tempfile.TemporaryDirectory(prefix="wewrite-topic-social-filter-") as tmpdir:
+            hotspots = Path(tmpdir) / "hotspots.json"
+            hotspots.write_text(json.dumps({
+                "items": [
+                    {"title": "甘孜通报稻城亚丁景区违规封堵省道", "source": "微博", "hot_normalized": 100, "url": "https://example.com/social"},
+                    {"title": "中国自研高算力芯片突破4纳米", "source": "微博", "hot_normalized": 70, "url": "https://example.com/chip"},
+                ]
+            }, ensure_ascii=False), encoding="utf-8")
+
+            proc = self.run_script("--hotspots", str(hotspots), "--style", str(REPO_ROOT / "style.yaml"), "--json")
+            self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+            payload = json.loads(proc.stdout)
+            titles = [item["hotspot"]["title"] for item in payload["topics"]]
+            self.assertNotIn("甘孜通报稻城亚丁景区违规封堵省道", titles)
+            self.assertIn("中国自研高算力芯片突破4纳米", titles)
+
     def test_llm_rerank_uses_fixture_and_is_explicitly_enabled(self):
         with tempfile.TemporaryDirectory(prefix="wewrite-topic-llm-test-") as tmpdir:
             hotspots = self.write_hotspots(tmpdir)
