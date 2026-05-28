@@ -60,7 +60,7 @@ allowed-tools:
 - 新稿件默认目录：`article_dir = {skill_dir}/output/{工作标题}/`
 - 目录统一通过 `python3 {skill_dir}/toolkit/cli.py new --title "{工作标题}" --author "{style.author}"` 创建；Windows PowerShell wrapper 只做薄转发，不再承载主逻辑。
 - `article.md` 是唯一正文源文件；`article-body.template.html`、`preview.html`、`generated/output.html`、`generated/draft.json` 都由模板脚本自动生成。
-- 图片统一放在 `assets/`，配图提示词统一放在 `generated/image-prompts.md`。
+- 图片统一放在 `assets/`，配图提示词统一放在 `generated/image-prompts.md`，结构化视觉规划统一放在 `generated/visual-plan.json`。
 - 图位文件名必须稳定；后续替换图片时，优先直接覆盖 `assets/` 里的同名文件，不要反复改 Markdown 路径。
 - `output/` 目录是默认新稿目录。
 
@@ -310,7 +310,9 @@ WebSearch: "{选题关键词} 数据 报告 2025 2026"
 读取: {skill_dir}/references/visual-prompts.md
 ```
 
-**6a.** 分析文章结构，生成封面 3 组创意 + 内文 3-6 张配图提示词，并保存到 `{article_dir}/generated/image-prompts.md`。
+**6a.** 分析文章结构，先生成 `{article_dir}/generated/visual-plan.json`，再生成封面 3 组创意 + 内文 3-6 张配图提示词，并保存到 `{article_dir}/generated/image-prompts.md`。
+- P13 后默认视觉策略是：**画面优先 + 少量标签 + 信息结构**。每张图先定义 `visual_role`（如 `cover_scene` / `system_map` / `flow_diagram` / `comparison` / `checklist` / `cost_structure`），再写画面主体、结构关系和 2-4 个短标签；禁止把图片做成纯文字卡片。
+- `visual-plan.json` 必须包含 `policy: picture_first_low_text_information_structure`、每张图的 `file`、`size`、`visual_role`、`scene`、`labels`、`text_density`、`composition`。`labels` 最多 4 个，`text_density` 必须是 `low` 或同等低文字密度描述，不能是 `text-card`。
 - 为封面和每张内文图分配稳定槽位与目标文件名：封面固定为 `assets/cover-wide.jpg` 和 `assets/cover-square.jpg`，内文固定为 `assets/img-01.jpg`、`assets/img-02.jpg`、`assets/img-03.jpg`……
 - 每篇文章必须同时产出两张封面：
   - `assets/cover-wide.jpg`：横版封面，用于公众号草稿箱默认封面
@@ -338,8 +340,8 @@ WebSearch: "{选题关键词} 数据 报告 2025 2026"
 **6b.** 先为封面和所有内文图生成本地占位图文件，并保存回 `{article_dir}/assets/`。
 - 占位图是默认交付物的一部分，即使没有生图 API 也必须存在。
 - 使用稳定文件名创建占位图：`assets/cover-wide.jpg`、`assets/cover-square.jpg`、`assets/img-01.jpg`、`assets/img-02.jpg`……
-- 占位图要和对应提示词绑定，至少能让用户在预览里看见版面位置、顺序和图位规模，后续只需直接覆盖同名文件即可替换。
-- 可调用：`python3 {skill_dir}/scripts/make_placeholder_image.py --output {article_dir}/assets/img-01.jpg --label "IMG 01" --size article`
+- 占位图要和对应提示词绑定，至少能让用户在预览里看见版面位置、顺序、信息结构和图位规模，后续只需直接覆盖同名文件即可替换。
+- 优先使用结构化占位图：`python3 {skill_dir}/scripts/make_placeholder_image.py --output {article_dir}/assets/img-01.jpg --label "从热点到工程问题" --size article --visual-spec {article_dir}/generated/img-01-visual-spec.json`。没有 `--visual-spec` 时才退回旧文字占位图。
 - 横版封面占位图：`python3 {skill_dir}/scripts/make_placeholder_image.py --output {article_dir}/assets/cover-wide.jpg --label "COVER 2.35:1" --size cover`
 - 方形封面占位图：`python3 {skill_dir}/scripts/make_placeholder_image.py --output {article_dir}/assets/cover-square.jpg --label "COVER 1:1" --size square`
 

@@ -39,6 +39,67 @@ class ImageGenerationTests(unittest.TestCase):
         self.assertGreater(r + g + b, 600)
         self.assertLess(abs(b - r), 80)
 
+    def test_placeholder_builds_structured_visual_not_text_card(self):
+        module = load_placeholder_module()
+        image = module.build_structured_visual(
+            1280,
+            720,
+            {
+                "visual_role": "system_map",
+                "scene": "three-stage agent cost pipeline",
+                "labels": ["上下文", "工具", "重试"],
+                "data_points": ["输入", "调用", "校验"],
+            },
+        )
+        self.assertEqual(image.size, (1280, 720))
+        # Structured visuals should still use a clean light canvas, but include
+        # enough non-background ink to be a diagram/scene rather than a plain text card.
+        colors = image.convert("RGB").getcolors(maxcolors=256000) or []
+        non_background = sum(count for count, rgb in colors if sum(rgb) < 720)
+        self.assertGreater(non_background, 1280 * 720 * 0.08)
+
+    def test_draft_from_topic_writes_visual_plan_with_low_text_density(self):
+        with tempfile.TemporaryDirectory(prefix="wewrite-visual-plan-") as raw_tmp:
+            tmp = Path(raw_tmp)
+            topic_file = tmp / "topic.json"
+            topic_file.write_text(json.dumps({
+                "topics": [{
+                    "recommended_title": "Agent 图片系统测试",
+                    "hotspot": {"title": "Agent 成本讨论", "source": "国内热点"},
+                    "engineering_question": "为什么多步 Agent 更容易烧 token？",
+                    "token_burner_angle": "从上下文、工具调用和重试链路拆开看。",
+                    "sources": [
+                        {"title": "OpenAI Tools", "url": "https://platform.openai.com/docs/guides/tools", "source_type": "official_docs", "summary": "官方文档说明工具调用会纳入模型应用流程。"},
+                        {"title": "HN Agent discussion", "url": "https://news.ycombinator.com/item?id=41210075", "source_type": "community", "summary": "开发者社区讨论 Agent 工具调用和上下文成本。"},
+                        {"title": "Reuters AI infra", "url": "https://www.reuters.com/technology/artificial-intelligence/", "source_type": "mainstream_media", "summary": "媒体报道企业关注 AI 推理成本和可靠性。"},
+                    ],
+                }]
+            }, ensure_ascii=False), encoding="utf-8")
+            env_root = tmp / "output"
+            proc = subprocess.run([
+                str(PYTHON), str(REPO_ROOT / "toolkit" / "cli.py"),
+                "draft-from-topic",
+                "--topic-file", str(topic_file),
+                "--author", "烧 Token 的人",
+            ], cwd=str(REPO_ROOT), env={"WEWRITE_OUTPUT_ROOT": str(env_root)}, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            self.assertEqual(proc.returncode, 0, msg=f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
+            payload = json.loads(proc.stdout)
+            visual_plan_path = Path(payload["artifacts"]["visual_plan"])
+            image_prompts_path = Path(payload["artifacts"]["image_prompts"])
+            self.assertTrue(visual_plan_path.exists())
+            self.assertTrue(image_prompts_path.exists())
+            plan = json.loads(visual_plan_path.read_text(encoding="utf-8"))
+            self.assertEqual(plan["policy"], "picture_first_low_text_information_structure")
+            self.assertGreaterEqual(len(plan["images"]), 5)
+            for spec in plan["images"]:
+                self.assertIn(spec["visual_role"], {"cover_scene", "system_map", "flow_diagram", "comparison", "checklist", "cost_structure"})
+                self.assertLessEqual(len(spec.get("labels", [])), 4)
+                self.assertNotEqual(spec.get("text_density"), "text-card")
+            prompts = image_prompts_path.read_text(encoding="utf-8")
+            self.assertIn("画面优先", prompts)
+            self.assertIn("不要大段文字", prompts)
+            self.assertNotIn("请生成一张文字卡片", prompts)
+
     def test_draft_writer_inserts_at_least_three_article_images(self):
         with tempfile.TemporaryDirectory() as td:
             tmp = Path(td)

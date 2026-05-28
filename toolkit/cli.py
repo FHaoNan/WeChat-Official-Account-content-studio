@@ -424,28 +424,123 @@ def _source_lines(sources: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def _write_placeholder_assets(article_dir: Path) -> None:
+def _visual_plan_for_topic(topic: dict, title: str) -> dict:
+    angle = str(topic.get("token_burner_angle") or topic.get("angle") or "从上下文、工具调用和重试链路拆开看。")
+    engineering_question = str(topic.get("engineering_question") or topic.get("ai_engineer_question") or "这个现象背后的工程问题是什么？")
+    base = {
+        "policy": "picture_first_low_text_information_structure",
+        "design_direction": "Claude Design inspired: clean editorial/product visual, white/cool-gray canvas, restrained green/blue accents, sparse CJK labels, no text-card layouts.",
+        "text_rule": "每张图只放 2-4 个短标签；不要大段文字、不要把正文搬到图里。",
+        "topic_title": title,
+    }
+    images = [
+        {
+            "file": "cover-wide.jpg",
+            "size": "cover",
+            "visual_role": "cover_scene",
+            "scene": title,
+            "labels": ["热点", "机制", "成本"],
+            "text_density": "low",
+            "composition": "editorial hero scene with abstract agent pipeline and token cost trace",
+        },
+        {
+            "file": "cover-square.jpg",
+            "size": "square",
+            "visual_role": "cost_structure",
+            "scene": "Token 成本结构",
+            "labels": ["上下文", "工具", "重试"],
+            "text_density": "low",
+            "composition": "square nested cost rings with sparse labels",
+        },
+        {
+            "file": "img-01.jpg",
+            "size": "article",
+            "visual_role": "system_map",
+            "scene": "从热点到工程问题",
+            "labels": ["热点", "事实", "工程"],
+            "text_density": "low",
+            "composition": "three-node map from domestic attention to overseas evidence to engineering question",
+        },
+        {
+            "file": "img-02.jpg",
+            "size": "article",
+            "visual_role": "flow_diagram",
+            "scene": engineering_question[:24],
+            "labels": ["上下文", "工具", "重试"],
+            "text_density": "low",
+            "composition": "horizontal process diagram showing agent steps accumulating token cost",
+        },
+        {
+            "file": "img-03.jpg",
+            "size": "article",
+            "visual_role": "checklist",
+            "scene": "发布前检查项",
+            "labels": ["成本", "延迟", "可靠性"],
+            "text_density": "low",
+            "composition": "decision checklist with three concrete evaluation lenses",
+        },
+    ]
+    if "对比" in angle or "比较" in angle:
+        images[3]["visual_role"] = "comparison"
+        images[3]["labels"] = ["旧流程", "新流程"]
+    base["images"] = images
+    return base
+
+
+def _write_visual_prompts(generated_dir: Path, plan: dict) -> Path:
+    lines = [
+        "# Image Prompts",
+        "",
+        "总原则：画面优先，用场景、流程、结构和对比讲清楚，不做文字卡片。",
+        "文字规则：每张图只允许 2-4 个短标签；不要大段文字；不要把文章正文搬进图片。",
+        "视觉方向：白/冷白/浅灰底，少量低饱和绿或浅蓝，网页级排版，克制、真实、专业可信。",
+        "",
+    ]
+    for spec in plan.get("images", []):
+        labels = " / ".join(spec.get("labels", []))
+        lines.extend([
+            f"## {spec.get('file')}",
+            f"- visual_role: {spec.get('visual_role')}",
+            f"- scene: {spec.get('scene')}",
+            f"- composition: {spec.get('composition')}",
+            f"- labels: {labels}",
+            "- negative: 大段文字、PPT 字卡、霓虹蓝紫、3D 机器人、发光芯片、旧报纸/卡其土黄色",
+            "",
+        ])
+    path = generated_dir / "image-prompts.md"
+    write_utf8(path, "\n".join(lines).strip() + "\n")
+    return path
+
+
+def _write_placeholder_assets(article_dir: Path, topic: dict | None = None, title: str | None = None) -> dict:
     assets = article_dir / "assets"
     assets.mkdir(parents=True, exist_ok=True)
-    image_specs = {
-        "img-01.jpg": ("article", "Agent 成本链路总览", "上下文 / 工具调用 / 失败重试"),
-        "img-02.jpg": ("article", "工具调用与上下文膨胀", "每一步都可能继续携带历史"),
-        "img-03.jpg": ("article", "发布前看三项成本", "成本 / 延迟 / 可靠性"),
-        "cover-wide.jpg": ("cover", "Agent 为什么越用越贵", "烧 Token 的人"),
-        "cover-square.jpg": ("square", "Agent 成本", "多步任务的系统账"),
-    }
+    generated_dir = article_dir / "generated"
+    generated_dir.mkdir(parents=True, exist_ok=True)
+    plan = _visual_plan_for_topic(topic or {}, title or "Agent 成本")
+    visual_plan_path = generated_dir / "visual-plan.json"
+    write_utf8(visual_plan_path, json.dumps(plan, ensure_ascii=False, indent=2) + "\n")
+    image_prompts_path = _write_visual_prompts(generated_dir, plan)
+
     generator = SKILL_ROOT / "scripts" / "make_placeholder_image.py"
-    for name, (size, label, subtitle) in image_specs.items():
+    for spec in plan["images"]:
+        name = str(spec["file"])
+        size = str(spec.get("size") or "article")
+        label = str(spec.get("scene") or name)
+        subtitle = " / ".join(str(item) for item in spec.get("labels", [])[:4])
         path = assets / name
+        spec_path = generated_dir / f"{Path(name).stem}-visual-spec.json"
+        write_utf8(spec_path, json.dumps(spec, ensure_ascii=False, indent=2) + "\n")
         should_generate = not path.exists() or path.read_bytes() == b"placeholder"
         if not should_generate:
             continue
         code, stdout, stderr = run_python_script_capture(
             generator,
-            ["--output", str(path), "--label", label, "--subtitle", subtitle, "--size", size],
+            ["--output", str(path), "--label", label, "--subtitle", subtitle, "--size", size, "--visual-spec", str(spec_path)],
         )
         if code != 0:
-            raise RuntimeError(f"failed to generate placeholder image {path}: {stderr or stdout}")
+            raise RuntimeError(f"failed to generate structured visual image {path}: {stderr or stdout}")
+    return {"visual_plan": str(visual_plan_path), "image_prompts": str(image_prompts_path)}
 
 
 def _build_topic_article(topic: dict, sources: list[dict]) -> str:
@@ -482,7 +577,7 @@ def _build_topic_article(topic: dict, sources: list[dict]) -> str:
 
     ## 事实链路怎么补
 
-    这篇草稿已经先把可验证来源放进 sources.json，并在质量门禁里强制检查三类来源是否齐全：一手来源、社区讨论、英文媒体或强二手验证。
+    这篇草稿已经先把可验证来源放进 sources.json，并在质量门禁里强制检查一手来源是否存在；社区讨论和英文媒体只作为可选支撑，不再硬凑三类。
 
     {source_section}
 
@@ -543,7 +638,7 @@ def cmd_draft_from_topic(args) -> int:
         if writer_stderr:
             print(writer_stderr, file=sys.stderr, end="")
         return writer_code
-    _write_placeholder_assets(article_dir)
+    visual_artifacts = _write_placeholder_assets(article_dir, topic, title)
 
     render_script = SKILL_ROOT / "skill2 paibanyouhua" / "scripts" / "render-article.py"
     render_args = ["--article-dir", str(article_dir)]
@@ -575,6 +670,8 @@ def cmd_draft_from_topic(args) -> int:
         "evidence_report": str(generated_dir / "evidence-report.json"),
         "source_report": str(generated_dir / "source-report.json"),
         "quality_gates": str(generated_dir / "quality-gates.json"),
+        "visual_plan": visual_artifacts["visual_plan"],
+        "image_prompts": visual_artifacts["image_prompts"],
     }
     result = {
         "success": True,
