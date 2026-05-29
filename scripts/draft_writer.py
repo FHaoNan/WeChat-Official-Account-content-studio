@@ -161,7 +161,7 @@ def build_article(topic: dict[str, Any], claims: list[dict[str, Any]]) -> str:
     third_claim = claims[2]["source_id"] if len(claims) > 2 else first_claim
     evidence_lines = "\n".join(claim_sentence(claim) for claim in claims) or "- 暂无可引用事实。"
 
-    return textwrap.dedent(f"""\
+    article = textwrap.dedent(f"""\
     # {title}
 
     ## 先说结论
@@ -184,7 +184,7 @@ def build_article(topic: dict[str, Any], claims: list[dict[str, Any]]) -> str:
 
     ## 证据链
 
-    {evidence_lines}
+    __EVIDENCE_LINES__
 
     这三类证据要分开看：一手来源负责确认产品或技术机制，社区讨论只负责暴露真实使用摩擦，英文媒体或强二手来源负责交叉验证产业判断。文章正文不需要堆链接，链接和来源 URL 会保留在内部 evidence ledger 里；如果缺少一手来源，才应该阻塞发布 [{first_claim}]。
 
@@ -203,6 +203,7 @@ def build_article(topic: dict[str, Any], claims: list[dict[str, Any]]) -> str:
 
     所以，这个热点可以先记住一句话：Agent 的价值来自“多做几步”，成本也恰好烧在“多做几步”。真正值得关注的不是它能不能完成一个 demo，而是当任务变长、工具变多、上下文变厚之后，系统还能不能用可承受的 token 预算稳定跑完 [{first_claim}][{second_claim}][{third_claim}]。
     """)
+    return article.replace("__EVIDENCE_LINES__", evidence_lines)
 
 
 def build_ledger(topic: dict[str, Any], claims: list[dict[str, Any]]) -> dict[str, Any]:
