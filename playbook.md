@@ -26,6 +26,14 @@
 4. 引用、代码、callout 等卡片只做轻量信息块：14-15px 内边距、10-12px 圆角、手机屏内不溢出；避免多层边框、厚阴影和大面积灰底。
 5. 每次改模板或主题后，至少跑 `tests/test_mobile_render_spacing.py`，确认 shell、段落、图片、卡片四类边距没有回退。
 
+## 发布前编辑质量门禁
+
+1. 发布正文必须面向读者，不能泄漏内部工作流词：`official_docs`、`github_or_paper`、`internal/evidence ledger`、`source gate`、`evidence gate`、`需要在后续深读`、`阻塞发布`、`本选题的 X 证据` 等出现即阻塞。
+2. “证据链”如果放在正文里，必须读者化表达；不要写“这是某类证据”“后续补摘录”“URL 留在 ledger”这种给 agent/编辑看的话。
+3. 标题必须和正文持续展开的主题一致。标题有“芯片/算力/模型/Agent/token/Claude/ChatGPT/MCP”等强锚点时，正文必须持续展开对应对象；不能用泛 Agent/token 模板套任意热点。
+4. `scripts/editorial_gate.py --article-dir <dir> --json` 会生成 `generated/editorial-report.json`。`toolkit/cli.py check` 会把 `editorial_readiness` 写入 `quality-gates.json`，`publish-ready` 会读取该报告并 fail closed。
+5. P15 发现的“机器门禁通过但人工不能发”的样稿类型，P16 后必须被挡在 publish-ready 前。
+
 ## 默认素材采集口径
 
 - 先把中文选题翻译成英文关键词，再检索海外来源。

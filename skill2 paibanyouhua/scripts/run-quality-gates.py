@@ -17,6 +17,7 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 from layout_strategy import evaluate_layout_diversity  # noqa: E402
+from editorial_gate import run_editorial_gate  # noqa: E402
 
 
 def configure_stdio() -> None:
@@ -186,6 +187,7 @@ def main() -> int:
     seo_path = generated_dir / "seo-report.json"
     source_path = generated_dir / "source-report.json"
     evidence_path = generated_dir / "evidence-report.json"
+    editorial_path = generated_dir / "editorial-report.json"
 
     checks: list[dict] = []
     artifacts: dict[str, object] = {
@@ -194,6 +196,7 @@ def main() -> int:
         "seo_report": str(seo_path),
         "source_report": str(source_path),
         "evidence_report": str(evidence_path),
+        "editorial_report": str(editorial_path),
     }
 
     article_path = article_dir / "article.md"
@@ -424,6 +427,16 @@ def main() -> int:
         unsupported = int(evidence_summary.get("unsupported", 0) or 0)
         detail = "key claims have evidence citations" if evidence_passed else f"unsupported claim sentences: {unsupported}"
         add_check(checks, "evidence_coverage", "pass" if evidence_passed else "fail", detail, data=evidence_summary)
+
+    try:
+        editorial_result = run_editorial_gate(article_dir)
+        editorial_summary = editorial_result.get("summary", {}) if isinstance(editorial_result, dict) else {}
+        editorial_passed = bool(editorial_summary.get("passed"))
+        failed_editorial = [item for item in editorial_result.get("checks", []) if item.get("status") == "fail"] if isinstance(editorial_result, dict) else []
+        detail = "editorial readiness ok" if editorial_passed else "editorial blockers: " + ", ".join(str(item.get("name")) for item in failed_editorial)
+        add_check(checks, "editorial_readiness", "pass" if editorial_passed else "fail", detail, data=editorial_summary)
+    except Exception as exc:
+        add_check(checks, "editorial_readiness", "fail", f"editorial_gate.py failed: {exc}")
 
     report = {
         "article_dir": str(article_dir),

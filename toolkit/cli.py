@@ -237,6 +237,7 @@ def cmd_publish_ready(args) -> int:
         "quality_gates": str(generated_dir / "quality-gates.json"),
         "source_report": str(generated_dir / "source-report.json"),
         "evidence_report": str(generated_dir / "evidence-report.json"),
+        "editorial_report": str(generated_dir / "editorial-report.json"),
         "publish_ready_report": str(generated_dir / "publish-ready-report.json"),
     }
 
@@ -270,11 +271,12 @@ def cmd_publish_ready(args) -> int:
     quality_path = generated_dir / "quality-gates.json"
     source_path = generated_dir / "source-report.json"
     evidence_path = generated_dir / "evidence-report.json"
+    editorial_path = generated_dir / "editorial-report.json"
     quality: dict = {}
     source_report: dict = {}
     evidence_report: dict = {}
 
-    for path, name in [(quality_path, "quality_gates"), (source_path, "source_report"), (evidence_path, "evidence_report")]:
+    for path, name in [(quality_path, "quality_gates"), (source_path, "source_report"), (evidence_path, "evidence_report"), (editorial_path, "editorial_report")]:
         checks.append(_publish_ready_check(name, path.exists(), f"{name} {'found' if path.exists() else 'missing'}: {path}"))
 
     if quality_path.exists():
@@ -307,6 +309,17 @@ def cmd_publish_ready(args) -> int:
             checks.append(_publish_ready_check("evidence_coverage", ok, "key claims have evidence citations" if ok else f"unsupported claims: {summary.get('unsupported', 0)}", summary))
         except Exception as exc:
             checks.append(_publish_ready_check("evidence_report_json", False, f"evidence-report.json invalid: {exc}"))
+
+    if editorial_path.exists():
+        try:
+            editorial_report = _read_json_file(editorial_path)
+            summary = editorial_report.get("summary", {}) if isinstance(editorial_report.get("summary"), dict) else {}
+            ok = bool(summary.get("passed"))
+            failed_editorial = [item for item in editorial_report.get("checks", []) if item.get("status") == "fail"] if isinstance(editorial_report.get("checks", []), list) else []
+            detail = "editorial readiness ok" if ok else "editorial blockers: " + ", ".join(str(item.get("name")) for item in failed_editorial)
+            checks.append(_publish_ready_check("editorial_readiness", ok, detail, summary))
+        except Exception as exc:
+            checks.append(_publish_ready_check("editorial_report_json", False, f"editorial-report.json invalid: {exc}"))
 
     publish_dry_run_payload = None
     if args.skip_publish_dry_run:

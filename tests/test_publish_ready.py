@@ -75,6 +75,13 @@ class PublishReadyTests(unittest.TestCase):
                 "summary": {"passed": True, "unsupported": 0},
                 "unsupported_claims": [],
             }, ensure_ascii=False), encoding="utf-8")
+            (generated / "editorial-report.json").write_text(json.dumps({
+                "summary": {"passed": True, "fail": 0, "warn": 0},
+                "checks": [
+                    {"name": "internal_workflow_terms", "status": "pass"},
+                    {"name": "title_body_alignment", "status": "pass"},
+                ],
+            }, ensure_ascii=False), encoding="utf-8")
             (generated / "quality-gates.json").write_text(json.dumps({
                 "summary": {"fail": 0, "warn": 1, "skip": 0, "non_pass": 1},
                 "checks": [
@@ -93,6 +100,7 @@ class PublishReadyTests(unittest.TestCase):
         checks = {item["name"]: item for item in payload["checks"]}
         self.assertEqual(checks["source_credibility"]["status"], "pass")
         self.assertEqual(checks["evidence_coverage"]["status"], "pass")
+        self.assertEqual(checks["editorial_readiness"]["status"], "pass")
         self.assertEqual(checks["quality_no_failures"]["status"], "pass")
         self.assertEqual(checks["publish_dry_run"]["status"], "skip")
         self.assertTrue((article_dir / "generated" / "publish-ready-report.json").exists())
@@ -105,6 +113,7 @@ class PublishReadyTests(unittest.TestCase):
         checks = {item["name"]: item for item in payload["checks"]}
         self.assertEqual(checks["source_report"].get("status"), "fail")
         self.assertEqual(checks["evidence_report"].get("status"), "fail")
+        self.assertEqual(checks["editorial_report"].get("status"), "fail")
         self.assertEqual(checks["quality_gates"].get("status"), "fail")
 
     def test_publish_ready_default_requires_publish_draft_dry_run(self):
