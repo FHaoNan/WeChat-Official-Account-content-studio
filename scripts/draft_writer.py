@@ -104,8 +104,7 @@ def source_fact(source: dict[str, Any], title: str) -> str:
         value = clean_text(source.get(key))
         if value:
             return value
-    source_type = clean_text(source.get("source_type") or source.get("category") or "来源")
-    return f"{title} 是本选题的 {source_type} 证据，需要在后续深读时补充更精确的原文摘录。"
+    return f"《{title}》提供了一条可核验资料，可用于交叉确认本文关于技术机制、产品边界或产业进展的判断。"
 
 
 def category_name(source: dict[str, Any]) -> str:
@@ -151,7 +150,84 @@ def claim_sentence(claim: dict[str, Any]) -> str:
     return f"- [{claim['source_id']}] {fact}。"
 
 
-def build_article(topic: dict[str, Any], claims: list[dict[str, Any]]) -> str:
+def topic_context(topic: dict[str, Any]) -> str:
+    hotspot_source, hotspot_title = topic_hotspot(topic)
+    return " ".join([
+        topic_title(topic),
+        hotspot_source,
+        hotspot_title,
+        clean_text(topic.get("engineering_question") or topic.get("ai_engineer_question") or topic.get("ai_engineering_question")),
+        clean_text(topic.get("token_burner_angle") or topic.get("angle") or topic.get("editorial_reason")),
+    ])
+
+
+def is_chip_topic(topic: dict[str, Any]) -> bool:
+    context = topic_context(topic).lower()
+    return any(term.lower() in context for term in ["芯片", "算力", "半导体", "gpu", "npu", "推理卡", "国产"])
+
+
+def build_evidence_note(first_claim: str) -> str:
+    return (
+        "这些资料的作用不是堆链接，而是把判断边界钉清楚：官方文档确认产品或技术机制，"
+        "代码和论文资料帮助观察实现路径，社区或媒体材料只作为使用摩擦和产业判断的辅助信号。"
+        f"读者需要记住的是结论如何被支撑，而不是被一串链接淹没 [{first_claim}]。"
+    )
+
+
+def build_chip_article(topic: dict[str, Any], claims: list[dict[str, Any]], evidence_lines: str) -> str:
+    title = topic_title(topic)
+    hotspot_source, hotspot_title = topic_hotspot(topic)
+    engineering_question = clean_text(topic.get("engineering_question") or topic.get("ai_engineer_question") or topic.get("ai_engineering_question") or "这条芯片消息能不能进入真实 AI 推理链路？")
+    angle = clean_text(topic.get("token_burner_angle") or topic.get("angle") or topic.get("editorial_reason") or "从芯片、算力、软件栈和推理服务成本拆开看。")
+    first_claim = claims[0]["source_id"] if claims else "S?"
+    second_claim = claims[1]["source_id"] if len(claims) > 1 else first_claim
+    third_claim = claims[2]["source_id"] if len(claims) > 2 else first_claim
+    article = textwrap.dedent(f"""\
+    # {title}
+
+    ## 先说结论
+
+    这条芯片消息真正值得看的，不是“又有好消息”这几个字，而是它离真实 AI 推理链路还有多远。芯片、算力、显存带宽、软件栈和推理服务会一起决定模型调用成本，任何一个环节跟不上，发布会参数都很难变成可用的生产能力 [{first_claim}]。
+
+    国内热点入口是「{hotspot_source} / {hotspot_title}」。这篇文章不复述热搜，而是回到一个工程问题：{engineering_question} [{first_claim}]
+
+    ![芯片进入推理链路的三道门槛](img-01.jpg)
+    *图 1：芯片新闻要落到推理链路里看，重点是算力、软件栈和真实工作负载 [{first_claim}]。*
+
+    ## 这条芯片消息该怎么判断
+
+    {angle} [{first_claim}]
+
+    对 AI 产品来说，芯片不是孤立零件。它要和驱动、算子库、模型适配、推理框架、监控和成本核算一起工作。也就是说，国产芯片真正进入生产环境，要看的不是单点峰值，而是能不能稳定承接模型推理、工具调用和长上下文任务 [{second_claim}]。
+
+    ![从芯片到产品成本](img-02.jpg)
+    *图 2：芯片能力只有进入软件栈和推理服务，才会真正影响 token 成本和响应延迟 [{second_claim}]。*
+
+    ## 证据链
+
+    __EVIDENCE_LINES__
+
+    {build_evidence_note(first_claim)}
+
+    ## 对用户真正有影响的地方
+
+    用户感受到的不是芯片型号，而是回答速度、稳定性和价格。如果芯片和软件栈没有打通，AI 应用就会在推理延迟、并发能力和成本上暴露问题；如果打通了，同样的模型服务才可能用更可控的预算跑起来 [{second_claim}]。
+
+    ![发布前应该看的三项指标](img-03.jpg)
+    *图 3：判断芯片进展是否有意义，至少看成本、延迟和可部署性三件事 [{third_claim}]。*
+
+    ## 对公司真正有影响的地方
+
+    对公司来说，芯片进展最终要转成两张账：一张是推理成本账，一张是供应链和部署确定性账。只要算力、软件栈和主流模型适配没有形成闭环，企业就很难把“国产替代”直接等同于“可大规模上线” [{third_claim}]。
+
+    ## 结尾判断
+
+    所以，这类中国芯片热搜可以先记住一句话：真正的好消息，不是芯片参数更漂亮，而是它开始进入真实 AI 推理链路。只有当国产芯片能稳定跑模型、接入工具链、降低推理成本，才算真正烧到了该烧的 token 上 [{first_claim}][{second_claim}][{third_claim}]。
+    """)
+    return article.replace("__EVIDENCE_LINES__", evidence_lines)
+
+
+def build_agent_article(topic: dict[str, Any], claims: list[dict[str, Any]], evidence_lines: str) -> str:
     title = topic_title(topic)
     hotspot_source, hotspot_title = topic_hotspot(topic)
     engineering_question = clean_text(topic.get("engineering_question") or topic.get("ai_engineer_question") or topic.get("ai_engineering_question") or "这个现象背后的工程问题是什么？")
@@ -159,7 +235,6 @@ def build_article(topic: dict[str, Any], claims: list[dict[str, Any]]) -> str:
     first_claim = claims[0]["source_id"] if claims else "S?"
     second_claim = claims[1]["source_id"] if len(claims) > 1 else first_claim
     third_claim = claims[2]["source_id"] if len(claims) > 2 else first_claim
-    evidence_lines = "\n".join(claim_sentence(claim) for claim in claims) or "- 暂无可引用事实。"
 
     article = textwrap.dedent(f"""\
     # {title}
@@ -186,7 +261,7 @@ def build_article(topic: dict[str, Any], claims: list[dict[str, Any]]) -> str:
 
     __EVIDENCE_LINES__
 
-    这三类证据要分开看：一手来源负责确认产品或技术机制，社区讨论只负责暴露真实使用摩擦，英文媒体或强二手来源负责交叉验证产业判断。文章正文不需要堆链接，链接和来源 URL 会保留在内部 evidence ledger 里；如果缺少一手来源，才应该阻塞发布 [{first_claim}]。
+    {build_evidence_note(first_claim)}
 
     ## 对用户真正有影响的地方
 
@@ -204,6 +279,13 @@ def build_article(topic: dict[str, Any], claims: list[dict[str, Any]]) -> str:
     所以，这个热点可以先记住一句话：Agent 的价值来自“多做几步”，成本也恰好烧在“多做几步”。真正值得关注的不是它能不能完成一个 demo，而是当任务变长、工具变多、上下文变厚之后，系统还能不能用可承受的 token 预算稳定跑完 [{first_claim}][{second_claim}][{third_claim}]。
     """)
     return article.replace("__EVIDENCE_LINES__", evidence_lines)
+
+
+def build_article(topic: dict[str, Any], claims: list[dict[str, Any]]) -> str:
+    evidence_lines = "\n".join(claim_sentence(claim) for claim in claims) or "- 暂无可引用事实。"
+    if is_chip_topic(topic):
+        return build_chip_article(topic, claims, evidence_lines)
+    return build_agent_article(topic, claims, evidence_lines)
 
 
 def build_ledger(topic: dict[str, Any], claims: list[dict[str, Any]]) -> dict[str, Any]:

@@ -64,6 +64,7 @@ allowed-tools:
 - 图位文件名必须稳定；后续替换图片时，优先直接覆盖 `assets/` 里的同名文件，不要反复改 Markdown 路径。
 - P14 后微信渲染默认按手机端安全区优化：外层正文 shell 使用白底、`padding:0 16px`、`max-width:677px`、无桌面卡片阴影；正文段落 `line-height` 约 1.74、段后约 14px；正文图片在安全区内 `width:100%`，不再 `24px auto` 造成窄图感；引用/代码等卡片使用 14-15px 内边距和 10-12px 圆角。
 - P16 后发布前必须通过编辑可发布性门禁：`scripts/editorial_gate.py` 会生成 `generated/editorial-report.json`，阻塞正文泄漏 `official_docs`、`github_or_paper`、`internal/evidence ledger`、`source gate`、`需要在后续深读`、`阻塞发布`、`本选题的 X 证据` 等内部工作流痕迹，也会阻塞标题和正文严重错位的通用模板稿。
+- P17 后自动写稿器默认生成读者化正文：无 snippet 的来源只写“可核验资料”类安全表述，不把 source_type 原字段写进正文；证据链段落只解释资料如何支撑判断，不提内部 ledger/gate；芯片/算力类标题走芯片主线模板，不再套用通用 Agent/token 成本模板。
 - `output/` 目录是默认新稿目录。
 
 **Onboard 例外**：Onboard 是交互式的（需要问用户问题），不受"全自动"约束。Onboard 完成后回到全自动管道。

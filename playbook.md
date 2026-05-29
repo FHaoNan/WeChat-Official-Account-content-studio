@@ -34,6 +34,14 @@
 4. `scripts/editorial_gate.py --article-dir <dir> --json` 会生成 `generated/editorial-report.json`。`toolkit/cli.py check` 会把 `editorial_readiness` 写入 `quality-gates.json`，`publish-ready` 会读取该报告并 fail closed。
 5. P15 发现的“机器门禁通过但人工不能发”的样稿类型，P16 后必须被挡在 publish-ready 前。
 
+## 自动写稿器规则
+
+1. 自动生成的 `article.md` 必须天然面向读者，不能先产内部笔记再指望 publish-ready 阻塞；`scripts/draft_writer.py` 里禁止把 `source_type` 原字段直接写进正文。
+2. 来源没有 snippet/summary/quote 时，只能写“可核验资料可用于交叉确认判断”这类保守表述；不能写“本选题的 official_docs 证据”“后续深读再补摘录”。
+3. 证据链可以保留，但必须解释资料如何支撑判断；不能提 ledger、source gate、evidence gate、阻塞发布或 URL 留存策略。
+4. 标题有芯片/算力/半导体/GPU/NPU/国产等锚点时，写稿主线必须转向芯片进入真实 AI 推理链路、软件栈、部署成本和供应链确定性；不要套通用 Agent/token 成本模板。
+5. 改写稿器后至少跑 `tests/test_draft_writer.py` 和 `tests/test_editorial_gate.py`，并用一篇真实 auto-draft 样稿确认 `editorial_readiness` 为 pass。
+
 ## 默认素材采集口径
 
 - 先把中文选题翻译成英文关键词，再检索海外来源。
