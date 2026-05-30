@@ -63,13 +63,6 @@
 3. `section_evidence` 要列出每个 H2 引用的 `[Sx]`。新写稿模板应保证每个主要 H2 至少有 1 个证据锚点；如果出现 `sections_without_evidence`，需要优先修正文稿或补素材。
 4. `fallback_audit` 是发布前的编辑提示：fallback 占比高时不直接污染 `check` 的零 warning，但报告里必须给出“人工补证/实时搜索替换”的建议，避免把兜底来源误当成强证据。
 
-## 证据句可解释审计规则
-
-1. `generated/evidence-report.json` 不只检查“关键句有没有 `[Sx]`”，还要输出 `claim_audits`。每条审计至少包含：`claim`、`source_ids`、`support_level`、`support_reason`、`needs_human_review`。
-2. `support_level` 三档：`direct` 表示一手来源和判断句直接贴合；`indirect` 表示有来源但证据贴合度/映射不够，需要人工确认；`background` 表示媒体、社区、财报等只能提供背景或交叉验证，不能单独证明机制性判断。
-3. `needs_human_review=true` 是编辑提示，不直接变成 `check` warning；但未加引用的关键判断仍是 `unsupported_claims`，必须 fail closed。
-4. 改写稿模板或证据规则后，至少检查一篇真实样稿的 `evidence-report.json`：`unsupported=0`，并确认 `claim_audits` 的 direct/indirect/background 分布合理。
-
 ## 默认素材采集口径
 
 - 先把中文选题翻译成英文关键词，再检索海外来源。
