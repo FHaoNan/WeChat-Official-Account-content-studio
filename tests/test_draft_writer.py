@@ -12,6 +12,8 @@ if not PYTHON.exists():
     PYTHON = Path(sys.executable)
 SCRIPT = REPO_ROOT / "scripts" / "draft_writer.py"
 EDITORIAL_GATE = REPO_ROOT / "scripts" / "editorial_gate.py"
+LAYOUT_STRATEGY = REPO_ROOT / "scripts" / "layout_strategy.py"
+HUMANNESS_SCORE = REPO_ROOT / "scripts" / "humanness_score.py"
 CLI = REPO_ROOT / "toolkit" / "cli.py"
 
 
@@ -40,6 +42,32 @@ class DraftWriterTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(proc.returncode, expect, msg=f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
+        return json.loads(proc.stdout)
+
+    def run_layout_check(self, article_dir: Path, expect: int = 0):
+        proc = subprocess.run(
+            [str(PYTHON), str(LAYOUT_STRATEGY), "check", "--article-dir", str(article_dir)],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        self.assertEqual(proc.returncode, expect, msg=f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
+        return json.loads(proc.stdout)
+
+    def run_humanness_score(self, article: Path):
+        proc = subprocess.run(
+            [str(PYTHON), str(HUMANNESS_SCORE), str(article), "--json"],
+            cwd=str(REPO_ROOT),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            check=False,
+        )
+        self.assertEqual(proc.returncode, 0, msg=f"STDOUT:\n{proc.stdout}\nSTDERR:\n{proc.stderr}")
         return json.loads(proc.stdout)
 
     def write_topic_and_sources(self, tmpdir: Path) -> tuple[Path, Path]:
@@ -150,6 +178,11 @@ class DraftWriterTests(unittest.TestCase):
             self.assertNotIn("evidence ledger", text)
             editorial = self.run_editorial_gate(article_dir, expect=0)
             self.assertTrue(editorial["summary"]["passed"])
+            layout = self.run_layout_check(article_dir, expect=0)
+            self.assertEqual(layout["status"], "pass")
+            self.assertGreaterEqual(len([item for item in set(layout["current"]["module_sequence"]) if item != "image"]), 2)
+            humanness = self.run_humanness_score(article_dir / "article.md")
+            self.assertEqual(humanness["summary"]["failed_checks"], [])
 
     def test_draft_writer_generates_article_v1_with_citations_and_evidence_ledger(self):
         with tempfile.TemporaryDirectory(prefix="wewrite-draft-writer-") as raw_tmp:

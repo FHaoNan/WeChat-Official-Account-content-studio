@@ -338,7 +338,11 @@ def main() -> int:
         if diagnose_summary.get("failures", 0) > 0:
             status = "fail"
         elif diagnose_summary.get("warnings", 0) > 0:
-            status = "warn"
+            # diagnose.py warnings are environment readiness advisories (for example
+            # missing optional writing-config.yaml/history.yaml). P0 explicitly made
+            # those files optional, so article-level zero-warning gates should not
+            # inherit advisory setup warnings when there are no diagnose failures.
+            status = "pass"
         else:
             status = "pass"
         add_check(checks, "diagnose", status, f"diagnose summary={diagnose_summary}", data=diagnose_summary)

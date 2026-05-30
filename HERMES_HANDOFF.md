@@ -110,6 +110,7 @@ python3 toolkit/cli.py publish-draft --article-dir output/xxx --dry-run
 - P14 微信渲染边距已按手机端优化：模板 shell 使用白底、`padding:0 16px`、`max-width:677px`、无桌面阴影卡片；converter 会在主题样式后统一收紧正文段落、让图片在安全区内 `width:100%`、降低图注间距，并把引用/代码卡片改成手机友好的 14-15px 内边距。
 - P16 发布前编辑门禁已接入：`scripts/editorial_gate.py` 生成 `generated/editorial-report.json`；`check`/`run-quality-gates.py` 会把 `editorial_readiness` 写入 `quality-gates.json`；`publish-ready` 会读取 `editorial-report.json`，发现内部工作流词泄漏、证据链内部笔记化或标题正文严重错位时 fail closed。
 - P17 自动写稿器已改为默认读者化输出：无 snippet 来源不再生成“本选题的 official_docs 证据/后续深读”之类内部笔记，证据链说明不再提 ledger/gate/阻塞发布；芯片/算力/半导体类热点会走芯片主线模板，确保标题锚点在正文里持续展开并天然通过 editorial gate。
+- P18 已把真实样稿 `check` 收敛到零 warning：自动稿模板补充 callout/table 等非图片结构模块；humanness 段落节奏检查忽略图注、表格、callout、证据清单等结构块，只评估正文 prose；`run-quality-gates.py` 不再把 `diagnose.py` 的可选环境 warning（缺 writing-config/history）记为文章级 warning，但 diagnose failures 仍 fail。
 - 保留 Windows PowerShell wrapper，但主逻辑应迁移到 Python，PowerShell 只做薄包装。
 
 ### P1：把国内热点抓取升级为 AI 选题源

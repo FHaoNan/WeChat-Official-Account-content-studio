@@ -104,7 +104,17 @@ def source_fact(source: dict[str, Any], title: str) -> str:
         value = clean_text(source.get(key))
         if value:
             return value
-    return f"《{title}》提供了一条可核验资料，可用于交叉确认本文关于技术机制、产品边界或产业进展的判断。"
+    source_type = clean_text(source.get("source_type") or source.get("category") or "")
+    source_hint = ""
+    if "github" in source_type.lower() or "paper" in source_type.lower():
+        source_hint = "这类 GitHub/论文资料"
+    elif "official" in source_type.lower() or "primary" in source_type.lower():
+        source_hint = "这类官方资料"
+    elif "media" in source_type.lower():
+        source_hint = "这类媒体资料"
+    else:
+        source_hint = "这类资料"
+    return f"《{title}》提供了一条可核验资料，{source_hint}可用于交叉确认本文关于技术机制、产品边界或产业进展的判断。"
 
 
 def category_name(source: dict[str, Any]) -> str:
@@ -189,6 +199,12 @@ def build_chip_article(topic: dict[str, Any], claims: list[dict[str, Any]], evid
 
     这条芯片消息真正值得看的，不是“又有好消息”这几个字，而是它离真实 AI 推理链路还有多远。芯片、算力、显存带宽、软件栈和推理服务会一起决定模型调用成本，任何一个环节跟不上，发布会参数都很难变成可用的生产能力 [{first_claim}]。
 
+    别急着上头。
+
+    :::callout info
+    说白了，芯片新闻先别只看参数表。坑在这里：它最终要落到推理成本、接口适配和真实业务延迟上，账单很诚实 [{first_claim}]。
+    :::
+
     国内热点入口是「{hotspot_source} / {hotspot_title}」。这篇文章不复述热搜，而是回到一个工程问题：{engineering_question} [{first_claim}]
 
     ![芯片进入推理链路的三道门槛](img-01.jpg)
@@ -199,6 +215,12 @@ def build_chip_article(topic: dict[str, Any], claims: list[dict[str, Any]], evid
     {angle} [{first_claim}]
 
     对 AI 产品来说，芯片不是孤立零件。它要和驱动、算子库、模型适配、推理框架、监控和成本核算一起工作。也就是说，国产芯片真正进入生产环境，要看的不是单点峰值，而是能不能稳定承接模型推理、工具调用和长上下文任务 [{second_claim}]。
+
+    | 判断项 | 应该看什么 |
+    | --- | --- |
+    | 算力 | 峰值之外，还要看真实模型负载下的吞吐和延迟 [{first_claim}] |
+    | 软件栈 | 驱动、算子库、框架适配能不能少折腾 [{second_claim}] |
+    | 成本 | token 账单、机器利用率和部署确定性要一起算 [{third_claim}] |
 
     ![从芯片到产品成本](img-02.jpg)
     *图 2：芯片能力只有进入软件栈和推理服务，才会真正影响 token 成本和响应延迟 [{second_claim}]。*
@@ -212,6 +234,10 @@ def build_chip_article(topic: dict[str, Any], claims: list[dict[str, Any]], evid
     ## 对用户真正有影响的地方
 
     用户感受到的不是芯片型号，而是回答速度、稳定性和价格。如果芯片和软件栈没有打通，AI 应用就会在推理延迟、并发能力和成本上暴露问题；如果打通了，同样的模型服务才可能用更可控的预算跑起来 [{second_claim}]。
+
+    等等。
+
+    这里不能只看“能不能跑”。还要看跑起来之后，接口是不是稳定，日志能不能追，账单是不是还能解释清楚 [{second_claim}]。
 
     ![发布前应该看的三项指标](img-03.jpg)
     *图 3：判断芯片进展是否有意义，至少看成本、延迟和可部署性三件事 [{third_claim}]。*
@@ -243,6 +269,12 @@ def build_agent_article(topic: dict[str, Any], claims: list[dict[str, Any]], evi
 
     这件事不只是一个 AI 产品热点。它真正值得拆的是：当产品从一次问答走向多步 Agent，成本就不再只是“输入几个字、输出几段话”，而会变成工具调用、上下文携带、失败重试和可靠性之间的系统账 [{first_claim}]。
 
+    别急着上头。
+
+    :::callout info
+    说白了，Agent 不是免费多做几步。坑在这里：每多一次工具调用、每多一段上下文，推理成本、接口延迟和账单都会跟着变厚 [{first_claim}]。
+    :::
+
     国内热点入口是「{hotspot_source} / {hotspot_title}」。但这篇文章不按热搜复述，而是用海外来源先把事实边界钉住，再回到一个工程问题：{engineering_question} [{first_claim}]
 
     ![Agent 成本链路总览](img-01.jpg)
@@ -253,6 +285,12 @@ def build_agent_article(topic: dict[str, Any], claims: list[dict[str, Any]], evi
     {angle} [{first_claim}]
 
     一个多步 Agent 往往不是只调用一次模型。它需要判断任务、选择工具、读工具返回、再决定下一步；每一步都可能把前面的上下文继续带进去。官方文档层面的事实说明，工具调用会把外部函数和 API 纳入模型应用流程 [{first_claim}]。这意味着，产品体验里看起来像“一次完成”的动作，工程上可能已经拆成了多轮模型和工具交互。
+
+    | 成本位置 | 为什么会变厚 |
+    | --- | --- |
+    | 上下文 | 历史消息、工具返回和约束会一起被带入 [{first_claim}] |
+    | 接口 | 工具调用越多，等待和失败重试越多 [{second_claim}] |
+    | 账单 | demo 很猛不代表长期使用便宜，账单很诚实 [{third_claim}] |
 
     ![工具调用与上下文膨胀](img-02.jpg)
     *图 2：工具调用越多，历史上下文、工具返回和检查步骤越容易叠加成系统账 [{second_claim}]。*
@@ -266,6 +304,10 @@ def build_agent_article(topic: dict[str, Any], claims: list[dict[str, Any]], evi
     ## 对用户真正有影响的地方
 
     对使用者来说，问题不是“Agent 贵不贵”这么笼统，而是它把成本藏到了哪些地方：更长的上下文、更频繁的工具调用、更多失败重试，以及为了稳定性增加的检查步骤。社区讨论里的开发者抱怨多步 Agent 会因为重试工具调用和携带长上下文而快速消耗 token [{second_claim}]，这正好解释了为什么同样一个任务，用 Agent 做可能比直接问答更贵。
+
+    等等。
+
+    这里不能只看“能不能跑”。还要看接口是不是稳定，日志能不能追，账单是不是还能解释清楚 [{second_claim}]。
 
     ![发布前应该看的三项成本](img-03.jpg)
     *图 3：判断一个 Agent 产品能否长期使用，至少要同时看成本、延迟和可靠性 [{third_claim}]。*

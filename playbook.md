@@ -42,6 +42,13 @@
 4. 标题有芯片/算力/半导体/GPU/NPU/国产等锚点时，写稿主线必须转向芯片进入真实 AI 推理链路、软件栈、部署成本和供应链确定性；不要套通用 Agent/token 成本模板。
 5. 改写稿器后至少跑 `tests/test_draft_writer.py` 和 `tests/test_editorial_gate.py`，并用一篇真实 auto-draft 样稿确认 `editorial_readiness` 为 pass。
 
+## 零 warning 发布门槛
+
+1. 真实样稿的 `python3 toolkit/cli.py check --article-dir <dir>` 必须达到 `fail=0 / warn=0 / skip=0`。`publish-ready --skip-publish-dry-run` 允许且只允许 `publish_dry_run` 为显式 skip。
+2. `layout_diversity` 不接受纯图片模块稿；自动稿至少要有 2 类非图片结构模块，例如 callout + table。新增模板或改写稿器后，用 `scripts/layout_strategy.py check --article-dir <dir>` 验证。
+3. `humanness_summary` 的 warning 要从正文节奏解决，不要靠删检查。段落节奏只评估真实正文 prose；图注、表格、callout、证据清单等结构块不应被当成连续正文段落。
+4. `diagnose.py` 的缺 `writing-config.yaml` / `history.yaml` 属于可选环境建议，不计入文章级 `quality-gates.json` warning；但 diagnose failures 仍然阻塞。
+
 ## 默认素材采集口径
 
 - 先把中文选题翻译成英文关键词，再检索海外来源。

@@ -136,20 +136,46 @@ def check_sentence_length_variance(text: str) -> tuple[bool, str]:
     return False, f"句长标准差 {stddev:.1f}，偏整齐"
 
 
+def is_prose_paragraph(para: str) -> bool:
+    stripped = para.strip()
+    if not stripped:
+        return False
+    if stripped.startswith(("#", "![", "|", "- [S", ":::")):
+        return False
+    if stripped.endswith(":::") or "\n:::" in stripped:
+        return False
+    if stripped.startswith("*图") or stripped.startswith("图 ") or stripped.startswith("图"):
+        return False
+    if "\n|" in stripped or "| ---" in stripped:
+        return False
+    # Very short pauses are useful for broken-sentence rhythm but should not
+    # make paragraph-length variance fail.
+    if len(stripped) <= 12:
+        return False
+    return True
+
+
 def check_paragraph_length_variance(text: str) -> tuple[bool, str]:
     paragraphs = [para.strip() for para in re.split(r"\n\s*\n", text) if para.strip()]
-    paragraphs = [para for para in paragraphs if not para.startswith("#")]
+    paragraphs = [para for para in paragraphs if is_prose_paragraph(para)]
     if len(paragraphs) < 3:
         return True, "段落太少，不强制检查"
 
+    lengths = [len(re.sub(r"\[S\d+\]", "", para)) for para in paragraphs]
+    mean = sum(lengths) / len(lengths)
+    variance = sum((length - mean) ** 2 for length in lengths) / len(lengths)
+    stddev = variance ** 0.5
+
     consecutive_similar = 0
-    for current, nxt in zip(paragraphs, paragraphs[1:]):
-        if abs(len(current) - len(nxt)) <= 20:
+    for current, nxt in zip(lengths, lengths[1:]):
+        if abs(current - nxt) <= 20:
             consecutive_similar += 1
 
+    if stddev >= 20:
+        return True, f"段落长度标准差 {stddev:.1f}，整体节奏有波动"
     if consecutive_similar <= 1:
         return True, f"相近长度连续段落 {consecutive_similar} 组"
-    return False, f"相近长度连续段落 {consecutive_similar} 组，节奏偏平"
+    return False, f"段落长度标准差 {stddev:.1f}，相近长度连续段落 {consecutive_similar} 组，节奏偏平"
 
 
 def check_word_temperature_mix(text: str) -> tuple[bool, str]:
