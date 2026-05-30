@@ -56,6 +56,13 @@
 3. 搜索为空、被 403 或页面结构变化时，可以使用 curated fallback，但只限已识别的 chip/agent/通用 AI 主题；兜底来源必须是真实 canonical URL，并在 manifest 里标记 `origin=curated_fallback_after_search_empty`。陌生主题继续 fail closed，不能拿不相关来源凑数。
 4. 改 `research_sources.py` 后至少跑 `tests/test_research_sources.py`，并跑一次无 fixture 的 `auto-draft -> check -> publish-ready --skip-publish-dry-run`，确认真实搜索链路仍为 `check: fail=0/warn=0/skip=0`。
 
+## 来源可解释审计规则
+
+1. `generated/source-report.json` 不能只证明“有来源”，还要说明“为什么用它”。每条来源必须有 `why_this_source`、`what_it_supports`、`what_it_cannot_prove`、`assigned_sections`；有 snippet/summary 时必须保留。
+2. 官方文档/财报/GitHub/媒体/社区的解释边界要不同：官方文档证明机制和产品边界，GitHub/论文证明实现路径，财报证明产业和公司层面背景，媒体做交叉验证，社区只做反馈和争议线索。
+3. `section_evidence` 要列出每个 H2 引用的 `[Sx]`。新写稿模板应保证每个主要 H2 至少有 1 个证据锚点；如果出现 `sections_without_evidence`，需要优先修正文稿或补素材。
+4. `fallback_audit` 是发布前的编辑提示：fallback 占比高时不直接污染 `check` 的零 warning，但报告里必须给出“人工补证/实时搜索替换”的建议，避免把兜底来源误当成强证据。
+
 ## 默认素材采集口径
 
 - 先把中文选题翻译成英文关键词，再检索海外来源。

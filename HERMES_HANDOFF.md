@@ -112,6 +112,7 @@ python3 toolkit/cli.py publish-draft --article-dir output/xxx --dry-run
 - P17 自动写稿器已改为默认读者化输出：无 snippet 来源不再生成“本选题的 official_docs 证据/后续深读”之类内部笔记，证据链说明不再提 ledger/gate/阻塞发布；芯片/算力/半导体类热点会走芯片主线模板，确保标题锚点在正文里持续展开并天然通过 editorial gate。
 - P18 已把真实样稿 `check` 收敛到零 warning：自动稿模板补充 callout/table 等非图片结构模块；humanness 段落节奏检查忽略图注、表格、callout、证据清单等结构块，只评估正文 prose；`run-quality-gates.py` 不再把 `diagnose.py` 的可选环境 warning（缺 writing-config/history）记为文章级 warning，但 diagnose failures 仍 fail。
 - P19 已把真实搜索链路接入零 warning 要求：`research_sources.py` 解析 DuckDuckGo lite/html 两种结果页并保留 snippet；中文芯片/AI 热点会补英文 query 变体；实时搜索为空或 403 时，只允许已识别的 chip/agent/AI 主题使用真实 canonical 来源兜底（标记 `origin=curated_fallback_after_search_empty`），陌生主题继续 fail closed。真实网络 `auto-draft -> check` 已回归 `pass=22/warn=0/fail=0/skip=0`。
+- P20 已把来源报告升级为可解释审计：`source_gate.py` 生成的 `generated/source-report.json` 会为每条来源写入 `why_this_source`、`what_it_supports`、`what_it_cannot_prove`、`assigned_sections` 和 snippet；同时输出 `section_evidence`（每个 H2 引用了哪些 `[Sx]`）与 `fallback_audit`（fallback 数量/占比/人工补证建议）。真实网络回归仍为 `check pass=22/warn=0/fail=0/skip=0`。
 - 保留 Windows PowerShell wrapper，但主逻辑应迁移到 Python，PowerShell 只做薄包装。
 
 ### P1：把国内热点抓取升级为 AI 选题源
