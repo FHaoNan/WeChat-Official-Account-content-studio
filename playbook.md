@@ -49,6 +49,13 @@
 3. `humanness_summary` 的 warning 要从正文节奏解决，不要靠删检查。段落节奏只评估真实正文 prose；图注、表格、callout、证据清单等结构块不应被当成连续正文段落。
 4. `diagnose.py` 的缺 `writing-config.yaml` / `history.yaml` 属于可选环境建议，不计入文章级 `quality-gates.json` warning；但 diagnose failures 仍然阻塞。
 
+## 真实搜索零 warning 规则
+
+1. `scripts/research_sources.py` 是自动写作唯一来源补证入口。真实网络优先解析 DuckDuckGo lite/html 结果页，结果要保留 `snippet/summary` 写进 sources manifest，不能只留下 URL。
+2. 中文热点不能直接用中文热搜词硬搜海外资料；必须补英文 query 变体。芯片/算力类至少补 `AI chip inference documentation` 和 `AI chip inference GitHub arXiv software stack` 这类工程化检索词。
+3. 搜索为空、被 403 或页面结构变化时，可以使用 curated fallback，但只限已识别的 chip/agent/通用 AI 主题；兜底来源必须是真实 canonical URL，并在 manifest 里标记 `origin=curated_fallback_after_search_empty`。陌生主题继续 fail closed，不能拿不相关来源凑数。
+4. 改 `research_sources.py` 后至少跑 `tests/test_research_sources.py`，并跑一次无 fixture 的 `auto-draft -> check -> publish-ready --skip-publish-dry-run`，确认真实搜索链路仍为 `check: fail=0/warn=0/skip=0`。
+
 ## 默认素材采集口径
 
 - 先把中文选题翻译成英文关键词，再检索海外来源。

@@ -66,6 +66,7 @@ allowed-tools:
 - P16 后发布前必须通过编辑可发布性门禁：`scripts/editorial_gate.py` 会生成 `generated/editorial-report.json`，阻塞正文泄漏 `official_docs`、`github_or_paper`、`internal/evidence ledger`、`source gate`、`需要在后续深读`、`阻塞发布`、`本选题的 X 证据` 等内部工作流痕迹，也会阻塞标题和正文严重错位的通用模板稿。
 - P17 后自动写稿器默认生成读者化正文：无 snippet 的来源只写“可核验资料”类安全表述，不把 source_type 原字段写进正文；证据链段落只解释资料如何支撑判断，不提内部 ledger/gate；芯片/算力类标题走芯片主线模板，不再套用通用 Agent/token 成本模板。
 - P18 后真实样稿的 `toolkit/cli.py check` 目标是零 warning：自动稿默认插入至少 2 类非图片结构模块（callout/table 等）避免 `layout_diversity` 警告；humanness 段落节奏检查只评估正文 prose，不把图注、表格、callout、证据清单当连续正文；`diagnose.py` 的可选环境建议（缺 writing-config/history）不再污染文章级 `quality-gates.json`。
+- P19 后真实搜索链路也必须零 warning：`scripts/research_sources.py` 会优先解析 DuckDuckGo lite/html 真实结果，中文 AI/芯片热点会自动补英文 query 变体；搜索为空或被 403 时，只能对芯片/Agent/通用 AI 这些已识别主题使用带 `origin=curated_fallback_after_search_empty` 的真实 canonical 来源兜底，陌生主题仍 fail closed。来源 manifest 必须保留 snippet/summary，避免 draft_writer 回退到无素材泛写。
 - `output/` 目录是默认新稿目录。
 
 **Onboard 例外**：Onboard 是交互式的（需要问用户问题），不受"全自动"约束。Onboard 完成后回到全自动管道。

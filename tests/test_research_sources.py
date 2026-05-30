@@ -165,6 +165,75 @@ class ResearchSourcesTests(unittest.TestCase):
             sources = json.loads(out_sources.read_text(encoding="utf-8"))["sources"]
             self.assertTrue(all("primary" in item.get("categories", []) for item in sources))
 
+    def test_chinese_chip_topic_retries_with_english_fallback_queries(self):
+        with tempfile.TemporaryDirectory(prefix="wewrite-research-retry-") as raw_tmp:
+            tmpdir = Path(raw_tmp)
+            topic = tmpdir / "chip-topic.json"
+            topic.write_text(json.dumps({
+                "topics": [{
+                    "recommended_title": "中国芯片又传来好消息",
+                    "hotspot": {"title": "中国芯片又传来好消息", "source": "微博热搜"},
+                    "ai_engineer_question": "国产 AI 芯片进入真实推理链路，还差哪些工程条件？",
+                    "llm_review": {
+                        "overseas_evidence_plan": [
+                            {"source_type": "official_docs", "query": "官方/文档：中国芯片又传来好消息"},
+                            {"source_type": "github_or_paper", "query": "GitHub/论文：中国芯片 推理 软件栈"},
+                        ]
+                    }
+                }]
+            }, ensure_ascii=False), encoding="utf-8")
+            fixture = tmpdir / "search-results.json"
+            fixture.write_text(json.dumps({
+                "queries": {
+                    "AI chip inference documentation": [
+                        {"title": "NVIDIA Triton Inference Server", "url": "https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/index.html"}
+                    ],
+                    "AI chip inference GitHub arXiv software stack": [
+                        {"title": "FlashAttention GitHub", "url": "https://github.com/Dao-AILab/flash-attention"}
+                    ]
+                }
+            }, ensure_ascii=False), encoding="utf-8")
+
+            proc = self.run_script(
+                "--topic-file", str(topic),
+                "--search-fixture", str(fixture),
+                "--json",
+            )
+            payload = json.loads(proc.stdout)
+            self.assertTrue(payload["summary"]["passed"])
+            self.assertGreaterEqual(payload["summary"]["categories"]["primary"], 2)
+            queries = {source["research_query"] for source in payload["sources"]}
+            self.assertIn("AI chip inference documentation", queries)
+            self.assertIn("AI chip inference GitHub arXiv software stack", queries)
+
+    def test_parse_duckduckgo_lite_results_with_snippets(self):
+        from scripts.research_sources import parse_duckduckgo_results
+
+        html = """
+        <a rel="nofollow" href="//duckduckgo.com/l/?uddg=https%3A%2F%2Fdocs.nvidia.com%2Fdeeplearning%2Ftriton%2Dinference%2Dserver%2Fuser%2Dguide%2Fdocs%2Findex.html&amp;rut=x" class='result-link'>NVIDIA Triton Inference Server - NVIDIA Documentation Hub</a>
+        <td class='result-snippet'>Triton <b>Inference</b> Server delivers optimized performance.</td>
+        """
+        results = parse_duckduckgo_results(html, "NVIDIA inference platform documentation", limit=3)
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]["url"], "https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/index.html")
+        self.assertIn("Triton Inference Server", results[0]["snippet"])
+
+    def test_curated_fallback_sources_are_topic_family_constrained_and_auditable(self):
+        from scripts.research_sources import fallback_sources
+
+        chip_topic = {
+            "proposed_title": "AI产业链钱烧在哪：中国芯片又传来好消息",
+            "ai_engineer_question": "国产 AI 芯片进入真实推理链路，还差哪些工程条件？",
+        }
+        sources = fallback_sources("official_docs", chip_topic, "AI chip inference documentation")
+        self.assertGreaterEqual(len(sources), 1)
+        self.assertTrue(all(source["url"].startswith("https://") for source in sources))
+        self.assertTrue(all(source["origin"] == "curated_fallback_after_search_empty" for source in sources))
+        self.assertTrue(all(source.get("snippet") for source in sources))
+
+        unrelated_topic = {"proposed_title": "明星机场穿搭又上热搜"}
+        self.assertEqual(fallback_sources("mainstream_media", unrelated_topic, "celebrity airport outfit Reuters"), [])
+
 
 if __name__ == "__main__":
     unittest.main()
